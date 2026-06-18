@@ -1,7 +1,7 @@
 ---
 name: pipeline-capture
 description: Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar. Retrospective scan — produces a single pipeline.csv (all confidences, low rows flagged via the confidence/needs_review columns) shared with Primary for Seen Deal Analysis. Phases — Calendar discovery → windowed Gmail keyword passes → contact-graph expansion → classification → deck/doc synthesis (reads linked Google Slides/Docs + PDF/pptx/docx attachments + inline pitches to describe pre-opportunity & deck-only deals, sharing only the paraphrase) → aggregation. Use when the user says "scan my email for pipeline", "build my pipeline from email", "capture my deals from gmail", "/pipeline-capture", or wants to produce a pipeline CSV from their inbox. Defaults to 2025-01-01 through today; accepts an optional date range override (e.g. "2024-2025", "since 2024-06-01", "all of 2025").
-argument-hint: [start-date] [end-date]
+argument-hint: "[start-date] [end-date]"
 ---
 
 # Pipeline Capture Skill

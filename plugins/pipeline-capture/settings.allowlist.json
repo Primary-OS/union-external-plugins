@@ -1,0 +1,18 @@
+{
+  "_README": "Pre-approval allowlist for the pipeline-capture skill. Copy the `permissions` block into the VC's `.claude/settings.json` in the folder where they run the skill (create the file if absent). This lets the ~hundreds of connector + local calls run WITHOUT a permission prompt on each one. IMPORTANT: the three MCP server names below (Gmail / Google_Calendar / Google_Drive) must match how the connectors are actually registered on the VC's machine — confirm during setup. If they differ, run the 3-month validation scan once and approve each tool with 'Yes, and don't ask again for this tool'; those approvals carry the full run prompt-free even without this file.",
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Gmail",
+      "mcp__claude_ai_Google_Calendar",
+      "mcp__claude_ai_Google_Drive",
+      "Read",
+      "Write",
+      "Bash(python3:*)",
+      "Bash(textutil:*)",
+      "Bash(unzip:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(open:*)"
+    ]
+  }
+}

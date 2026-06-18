@@ -1,0 +1,17 @@
+{
+  "name": "primary-plugins",
+  "owner": {
+    "name": "Theo Sun",
+    "email": "theo@primary.vc"
+  },
+  "metadata": {
+    "description": "Primary Venture Partners tools for external VCs — pipeline capture and enrichment for Seen Deal Analysis."
+  },
+  "plugins": [
+    {
+      "name": "pipeline-capture",
+      "source": "./plugins/pipeline-capture",
+      "description": "Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar."
+    }
+  ]
+}

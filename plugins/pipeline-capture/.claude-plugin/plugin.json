@@ -1,0 +1,9 @@
+{
+  "name": "pipeline-capture",
+  "description": "Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar — produces a single pipeline.csv (all confidences) for Primary's Seen Deal Analysis, including deck/doc synthesis for stealth deals.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Theo Sun",
+    "email": "theo@primary.vc"
+  }
+}

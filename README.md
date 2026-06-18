@@ -14,7 +14,7 @@ Currently ships:
 **This repo is private.** Before the commands below, you must (1) accept the GitHub invite to this repo (you're added as an outside collaborator — you get *only* this repo, nothing else in the org), and (2) have git authenticated on your machine (`gh auth login`, macOS Keychain, or an SSH key). Without that, `marketplace add` can't clone the repo.
 
 ```
-/plugin marketplace add <owner>/<repo>        # e.g. Primary-OS/union-external-plugins  (fill in once hosted)
+/plugin marketplace add Primary-OS/union-external-plugins
 /plugin install pipeline-capture@union-external-plugins
 ```
 

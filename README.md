@@ -11,6 +11,8 @@ Currently ships:
 
 ## Install (for the VC)
 
+**This repo is private.** Before the commands below, you must (1) accept the GitHub invite to this repo (you're added as an outside collaborator — you get *only* this repo, nothing else in the org), and (2) have git authenticated on your machine (`gh auth login`, macOS Keychain, or an SSH key). Without that, `marketplace add` can't clone the repo.
+
 ```
 /plugin marketplace add <owner>/<repo>        # e.g. Primary-OS/union-external-plugins  (fill in once hosted)
 /plugin install pipeline-capture@union-external-plugins
@@ -30,7 +32,7 @@ Fixes pushed to this repo reach VCs through plugin updates. Updates are **not** 
 - enable auto-update once: `/plugin marketplace add` then turn on auto-update in `/plugin` settings, **or**
 - pull manually: `/plugin marketplace update union-external-plugins && /plugin update pipeline-capture@union-external-plugins`
 
-If this repo is **private**, auto-update at launch needs a git token in the environment *before* Claude Code starts (`export GITHUB_TOKEN=…` — set it with `printf`, never `echo`, to avoid a trailing newline).
+Because this repo is **private**, auto-update at launch needs a git token in the environment *before* Claude Code starts (`GITHUB_TOKEN` or `GH_TOKEN`). Set it with `printf '%s'`, never `echo` (a trailing newline silently breaks token auth). **If the token isn't set, auto-update silently no-ops and the VC drifts onto an old version** — so for hands-off updates this token step is required, not optional. Otherwise, updates must be pulled manually (which still needs interactive git auth).
 
 ## Permissions
 

@@ -1,4 +1,4 @@
-# Primary Plugins
+# Union External Plugins
 
 A Claude Code plugin marketplace from Primary Venture Partners, for external VCs in the Union network. One git repo that is *both* the marketplace and the plugin host.
 
@@ -12,8 +12,8 @@ Currently ships:
 ## Install (for the VC)
 
 ```
-/plugin marketplace add <owner>/<repo>        # e.g. Primary-OS/primary-plugins  (fill in once hosted)
-/plugin install pipeline-capture@primary-plugins
+/plugin marketplace add <owner>/<repo>        # e.g. Primary-OS/union-external-plugins  (fill in once hosted)
+/plugin install pipeline-capture@union-external-plugins
 ```
 
 Then connect **Gmail**, **Google Calendar**, and **Google Drive** in Claude Code → Settings → Connectors (sign in with your fund's Google account), and run it:
@@ -28,7 +28,7 @@ Then connect **Gmail**, **Google Calendar**, and **Google Drive** in Claude Code
 
 Fixes pushed to this repo reach VCs through plugin updates. Updates are **not** automatic by default for third-party marketplaces — to get them, either:
 - enable auto-update once: `/plugin marketplace add` then turn on auto-update in `/plugin` settings, **or**
-- pull manually: `/plugin marketplace update primary-plugins && /plugin update pipeline-capture@primary-plugins`
+- pull manually: `/plugin marketplace update union-external-plugins && /plugin update pipeline-capture@union-external-plugins`
 
 If this repo is **private**, auto-update at launch needs a git token in the environment *before* Claude Code starts (`export GITHUB_TOKEN=…` — set it with `printf`, never `echo`, to avoid a trailing newline).
 

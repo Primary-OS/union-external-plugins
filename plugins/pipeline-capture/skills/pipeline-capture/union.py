@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """union.py — connect the pipeline-capture skill to a fund's Union queue.
 
+Ships next to SKILL.md. Whether the skill was installed as a plugin or copied to
+~/.claude/skills/, find this file's absolute path with:
+    find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1
+then invoke it as `python3 <that path> <subcommand>`.
+
 Bundled with the pipeline-capture skill. Pure python3 stdlib (no pip). Subcommands:
 
   connect <code>     Decode a base64 connection code (issued by Primary) and write

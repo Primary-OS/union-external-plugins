@@ -4,20 +4,13 @@ This tool reconstructs your deal pipeline from your own Gmail + Google Calendar 
 
 ---
 
-## For you — 3 things, then walk away
+## For you
 
-1. **Unzip** this bundle somewhere easy (e.g. your Downloads folder). *(You've probably done this already.)*
-2. **Open Claude Code**, point it at the unzipped folder, and **paste this one line:**
+**Not installed yet?** Follow **[`SETUP.md`](../../SETUP.md)** first — it takes you from zero (install Claude Code → add the plugin → connect Google → paste your connection code), ~15 minutes and mostly one-time.
 
-   > Read ./pipeline-capture/ONBOARDING.md and follow the "Claude Code runbook" section to install and run the Primary pipeline-capture tool for me. Do the setup yourself — only stop to ask me to connect Google, or to confirm once before the full scan.
+Once you're set up, just run **`/pipeline-capture:pipeline-capture`** in Claude Code. It runs a quick 3-month test, shows you a sample, asks once before the full scan, then **publishes your pipeline to your private Union queue** and emails you the review link. The full scan is **~30–45 minutes, mostly unattended** — close the laptop and come back; it resumes automatically.
 
-3. **When Claude asks, click "Connect"** for Gmail, Google Calendar, and Google Drive, and sign in with your fund's Google account. *(This is the only manual step — Google sign-in can't be automated.)*
-
-4. **When Claude asks, paste the connection code** Primary sent you (a short string starting with letters/numbers). It links this tool to your private Union queue. *(One time only.)*
-
-> If Claude tells you to **restart Claude Code**, quit and reopen it, then **paste the same line again** — it picks up where it left off.
-
-That's it. Claude runs a quick 3-month test, shows you a sample, asks once before the full scan, then **publishes your pipeline to your private Union queue** and emails you the review link. The full scan is **~30–45 minutes, mostly unattended** — you can close the laptop and come back; it resumes automatically.
+> If Claude asks you to **restart Claude Code**, quit and reopen it, then run the command again — it picks up where it left off.
 
 ## What you get
 
@@ -38,21 +31,20 @@ Your pipeline lands in your **private review queue in Union** — one row per de
 
 **(This section is for the assistant. Execute the steps in order. The user is non-technical — minimize questions. Only stop for: Google OAuth connects, the one go/no-go before the full run, and a restart if required. This runbook is re-entrant: on entry, detect what's already done and jump to the first incomplete step.)**
 
-### Step 0 — Locate the bundle
-You are likely running in or near the unzipped folder. Find `pipeline-capture/SKILL.md` (search downward from the working directory, then `~/Downloads`, if not in the cwd). If you genuinely can't find it, ask the user where they unzipped the bundle. Note its absolute path as `BUNDLE`.
+### Step 0 — Confirm install & locate the helper
+This skill is already installed — as a **plugin** (via `/plugin install pipeline-capture@union-external-plugins`, the normal path; see `SETUP.md`) or copied into `~/.claude/skills/pipeline-capture/`. There is **nothing to copy**. Locate the bundled Union helper — it ships next to `SKILL.md` and the discovery works for either install:
+```bash
+UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
+```
+Note that absolute path and reuse it for every `union.py` call below. (If `find` returns nothing, the plugin isn't installed yet — point the user to `SETUP.md` Part 2.)
 
-### Step 1 — Install the skill
-- Ensure `~/.claude/skills/pipeline-capture/` exists (create it).
-- Copy `BUNDLE/SKILL.md`, `BUNDLE/settings.allowlist.json`, **and `BUNDLE/skills/pipeline-capture/union.py`** (the Union publish helper) into it. (`union.py` may live next to `SKILL.md` in the bundle — copy it from wherever `SKILL.md` was found.)
-- If `~/.claude/skills/pipeline-capture/SKILL.md` already exists, overwrite all of them (this is an update). Don't ask — just report "updated existing install" vs "fresh install."
-
-### Step 1b — Connect to Union (the publish destination)
+### Step 1 — Connect to Union (the publish destination)
 - Ask the user for the **connection code** Primary sent them (one line). If they don't have one, they can still proceed — the tool falls back to producing a CSV — so don't block; just note Union publishing will be skipped.
-- If they paste a code, run: `python3 ~/.claude/skills/pipeline-capture/union.py connect "<code>"`. It writes the fund's ingest URL + token to `~/.config/union/pipeline-capture.json` (token stored private, never in the repo or the CSV). Report the `✅ Connected to Union for <fund>` line back.
+- If they paste a code, run: `python3 "$UNION_PY" connect "<code>"`. It writes the fund's ingest URL + token to `~/.config/union/pipeline-capture.json` (token stored private, never in the repo or the CSV). Report the `✅ Connected to Union for <fund>` line back.
 - This is idempotent — re-running with a new code just updates the connection.
 
 ### Step 2 — Permission allowlist (prevents hundreds of prompts during the run)
-- Read `~/.claude/skills/pipeline-capture/settings.allowlist.json`.
+- Read the bundled `settings.allowlist.json` (it sits one level up from `union.py`: ``"$(dirname "$UNION_PY")/../../settings.allowlist.json"`` for a plugin install, or next to `SKILL.md` for a skills-dir install — `find ~/.claude -name settings.allowlist.json -path '*pipeline-capture*' | head -1` finds it either way).
 - Merge its `permissions.allow` array into the user's `~/.claude/settings.json` (create the file as `{"permissions":{"allow":[...]}}` if absent; union the arrays if it exists; never remove existing entries).
 - **The MCP server names in the allowlist (`mcp__claude_ai_Gmail`, `…Google_Calendar`, `…Google_Drive`) are best-effort.** If you can see the actual connector server names in this environment and they differ, substitute the correct ones. If you can't tell, leave them — the validation run's "don't ask again" approvals are the fallback.
 - If the user is uneasy about `Bash(rm:*)`, you may drop it; the skill's temp cleanup will just prompt a few times.

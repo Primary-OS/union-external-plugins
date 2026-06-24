@@ -11,20 +11,22 @@ Currently ships:
 
 ## Install (for the VC)
 
-**This repo is private.** Before the commands below, you must (1) accept the GitHub invite to this repo (you're added as an outside collaborator — you get *only* this repo, nothing else in the org), and (2) have git authenticated on your machine (`gh auth login`, macOS Keychain, or an SSH key). Without that, `marketplace add` can't clone the repo.
+**Full from-zero walkthrough — installing Claude Code, connecting Google, and your Union connection code — is in [`SETUP.md`](SETUP.md).** Start there if you don't already have Claude Code.
+
+Short version, once Claude Code is installed and signed in (this marketplace is **public** — no GitHub account or login needed):
 
 ```
 /plugin marketplace add Primary-OS/union-external-plugins
 /plugin install pipeline-capture@union-external-plugins
 ```
 
-Then connect **Gmail**, **Google Calendar**, and **Google Drive** in Claude Code → Settings → Connectors (sign in with your fund's Google account), and run it:
+Then connect **Gmail**, **Google Calendar**, and **Google Drive** in Claude Code → Settings → Connectors (sign in with your fund's Google account), paste your **connection code** from Primary when asked, and run it:
 
 ```
 /pipeline-capture:pipeline-capture
 ```
 
-> **Note on the command name:** plugin skills are namespaced as `plugin:skill`, so the command is `/pipeline-capture:pipeline-capture` (not bare `/pipeline-capture`). The full run guide is in [`plugins/pipeline-capture/ONBOARDING.md`](plugins/pipeline-capture/ONBOARDING.md).
+> **Note on the command name:** plugin skills are namespaced as `plugin:skill`, so the command is `/pipeline-capture:pipeline-capture` (not bare `/pipeline-capture`). Human setup guide: [`SETUP.md`](SETUP.md); run-time choreography: [`plugins/pipeline-capture/ONBOARDING.md`](plugins/pipeline-capture/ONBOARDING.md).
 
 ## Updates (the reason this is a plugin)
 
@@ -32,7 +34,7 @@ Fixes pushed to this repo reach VCs through plugin updates. Updates are **not** 
 - enable auto-update once: `/plugin marketplace add` then turn on auto-update in `/plugin` settings, **or**
 - pull manually: `/plugin marketplace update union-external-plugins && /plugin update pipeline-capture@union-external-plugins`
 
-Because this repo is **private**, auto-update at launch needs a git token in the environment *before* Claude Code starts (`GITHUB_TOKEN` or `GH_TOKEN`). Set it with `printf '%s'`, never `echo` (a trailing newline silently breaks token auth). **If the token isn't set, auto-update silently no-ops and the VC drifts onto an old version** — so for hands-off updates this token step is required, not optional. Otherwise, updates must be pulled manually (which still needs interactive git auth).
+The repo is **public**, so updates need no GitHub token or auth — enabling auto-update once, or the manual pull above, just works.
 
 ## Permissions
 

@@ -98,7 +98,11 @@ All deals — high, medium, **and** low confidence — go into a single `pipelin
    - `/pipeline-capture since 2024-06-01` → 2024-06-01 through today
    - `/pipeline-capture all of 2025` → 2025-01-01 through 2025-12-31
    - `/pipeline-capture 2025-01-01 2025-03-31` → explicit range (good for a first validation run)
-   - `/pipeline-capture sync` → **incremental pull** (recurring). Read the cursor with `python3 ~/.claude/skills/pipeline-capture/union.py cursor`; set the start date to that value **minus a 3-day overlap buffer** (re-staging an overlapping day is harmless — Union dedups on commit) and the end date to today. If the cursor is empty (never published), treat `sync` as a normal full default run. Tell the user the resolved incremental window in one line.
+   - `/pipeline-capture sync` → **incremental pull** (recurring). First locate the bundled helper (it ships with this skill; works for both a plugin install and a `~/.claude/skills/` install):
+     ```bash
+     UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
+     ```
+     Read the cursor with `python3 "$UNION_PY" cursor`; set the start date to that value **minus a 3-day overlap buffer** (re-staging an overlapping day is harmless — Union dedups on commit) and the end date to today. If the cursor is empty (never published), treat `sync` as a normal full default run. Tell the user the resolved incremental window in one line. (Resolve `UNION_PY` once and reuse the absolute path in later steps.)
    - Natural-language phrasings also valid; resolve to an ISO date range before scanning, then confirm with the user.
 2. Detect fund domain from the user's Gmail address (whatever the MCP server reports). Confirm with user before scanning.
 3. Check working directory for existing `pipeline_state.json`. If present and incomplete: resume from the last checkpoint (see **Error handling & recovery → Resume**) — announce in one line and continue **without asking**. If complete: ask whether to extend the window earlier, re-run, or abort.
@@ -479,10 +483,11 @@ Source breakdown:
 
 The pipeline never leaves the machine as raw email — only the structured rows in `pipeline.csv`. The default destination is the fund's **private Union review queue**: the rows stage there, invisible to Primary and the network, until the VC reviews and approves them in Union. The CSV hand-off below is the fallback for funds not yet connected to Union.
 
-**Always try the Union publish first:**
+**Always try the Union publish first** (locate the bundled helper the same way as the `sync` step — works for plugin and `~/.claude/skills/` installs):
 
 ```bash
-python3 ~/.claude/skills/pipeline-capture/union.py publish
+UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
+python3 "$UNION_PY" publish
 ```
 
 (Run it from the working directory so it finds `pipeline.csv`, or pass the path.) Then branch on the exit code / output:

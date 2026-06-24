@@ -1,7 +1,7 @@
 ---
 name: pipeline-capture
-description: Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar. Retrospective scan — produces a single pipeline.csv (all confidences, low rows flagged via the confidence/needs_review columns) shared with Primary for Seen Deal Analysis. Phases — Calendar discovery → windowed Gmail keyword passes → contact-graph expansion → classification → deck/doc synthesis (reads linked Google Slides/Docs + PDF/pptx/docx attachments + inline pitches to describe pre-opportunity & deck-only deals, sharing only the paraphrase) → aggregation. Use when the user says "scan my email for pipeline", "build my pipeline from email", "capture my deals from gmail", "/pipeline-capture", or wants to produce a pipeline CSV from their inbox. Defaults to 2025-01-01 through today; accepts an optional date range override (e.g. "2024-2025", "since 2024-06-01", "all of 2025").
-argument-hint: "[start-date] [end-date]"
+description: Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar. Retrospective scan — produces a single pipeline.csv (all confidences, low rows flagged via the confidence/needs_review columns) shared with Primary for Seen Deal Analysis. Phases — Calendar discovery → windowed Gmail keyword passes → contact-graph expansion → classification → deck/doc synthesis (reads linked Google Slides/Docs + PDF/pptx/docx attachments + inline pitches to describe pre-opportunity & deck-only deals, sharing only the paraphrase) → aggregation. Use when the user says "scan my email for pipeline", "build my pipeline from email", "capture my deals from gmail", "/pipeline-capture", "/pipeline-capture sync", or wants to produce a pipeline CSV from their inbox. Defaults to 2025-01-01 through today; accepts an optional date range override (e.g. "2024-2025", "since 2024-06-01", "all of 2025"). When the fund is connected to Union it publishes the pipeline straight to the fund's private review queue (falling back to a local CSV otherwise), and a sync run scans only new email since the last pull.
+argument-hint: "[start-date] [end-date] | sync"
 ---
 
 # Pipeline Capture Skill
@@ -98,6 +98,7 @@ All deals — high, medium, **and** low confidence — go into a single `pipelin
    - `/pipeline-capture since 2024-06-01` → 2024-06-01 through today
    - `/pipeline-capture all of 2025` → 2025-01-01 through 2025-12-31
    - `/pipeline-capture 2025-01-01 2025-03-31` → explicit range (good for a first validation run)
+   - `/pipeline-capture sync` → **incremental pull** (recurring). Read the cursor with `python3 ~/.claude/skills/pipeline-capture/union.py cursor`; set the start date to that value **minus a 3-day overlap buffer** (re-staging an overlapping day is harmless — Union dedups on commit) and the end date to today. If the cursor is empty (never published), treat `sync` as a normal full default run. Tell the user the resolved incremental window in one line.
    - Natural-language phrasings also valid; resolve to an ISO date range before scanning, then confirm with the user.
 2. Detect fund domain from the user's Gmail address (whatever the MCP server reports). Confirm with user before scanning.
 3. Check working directory for existing `pipeline_state.json`. If present and incomplete: resume from the last checkpoint (see **Error handling & recovery → Resume**) — announce in one line and continue **without asking**. If complete: ask whether to extend the window earlier, re-run, or abort.
@@ -474,9 +475,28 @@ Source breakdown:
   pipeline_run_log.md         ← audit log
 ```
 
-## Hand-off — make it trivial for the user to send `pipeline.csv` back to Primary
+## Deliver — publish to Union (default), or CSV + email (fallback)
 
-Output lives on the user's local filesystem. Primary cannot read it directly. After printing the summary, **proactively offer** the following three actions (in order, do them on demand):
+The pipeline never leaves the machine as raw email — only the structured rows in `pipeline.csv`. The default destination is the fund's **private Union review queue**: the rows stage there, invisible to Primary and the network, until the VC reviews and approves them in Union. The CSV hand-off below is the fallback for funds not yet connected to Union.
+
+**Always try the Union publish first:**
+
+```bash
+python3 ~/.claude/skills/pipeline-capture/union.py publish
+```
+
+(Run it from the working directory so it finds `pipeline.csv`, or pass the path.) Then branch on the exit code / output:
+
+- **Exit 0 (published).** stdout carries `REVIEW_URL:`, `STAGED:`, and `FLAGGED:` lines. Do all of:
+  1. Tell the user, in one line: `✅ Staged <STAGED> deals in your private Union queue (<FLAGGED> need a look) — review & approve here: <REVIEW_URL>`. Nothing is shared with Primary or the network until they approve in Union.
+  2. **Send the VC a self-notification email** (so they're reminded even after they close the terminal). Use the Gmail connector to send — **to the user's own Gmail address** (from the connector profile), not Primary — Subject `Union: <STAGED> deals staged for review`, body one line + the `REVIEW_URL`. Sending to self is safe to send directly (no draft needed); never email Primary the rows — approval is the VC's gate.
+  3. Offer (on demand) to reveal `pipeline.csv` in Finder for their own records, or preview the top 5 rows.
+- **Exit 3 (NOT_CONNECTED).** No Union connection configured → use the **CSV + email-to-Primary fallback** immediately below.
+- **Exit 4 (rejected) / 5 (unreachable).** Relay the script's one-line reason. `pipeline.csv` is intact locally. Offer to (a) retry `union.py publish`, or (b) fall back to emailing the CSV to Primary. For exit 4 with a 401, tell them the token is invalid/revoked and to ask Primary for a fresh connection code.
+
+### Fallback — CSV + email to Primary (only when not connected to Union)
+
+Output lives on the user's local filesystem. Primary cannot read it directly. **Proactively offer** the following three actions (in order, do them on demand):
 
 1. **Reveal the file in Finder** (macOS) / **Explorer** (Windows) / **xdg-open** (Linux). On macOS:
    ```bash

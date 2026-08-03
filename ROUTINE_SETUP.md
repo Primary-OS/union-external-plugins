@@ -76,10 +76,13 @@ nothing extra to configure.
 - **Env-var secret:** the token is only a *publish* credential for your own fund's
   queue (it can't read anything), and it lives only in your own routine's
   environment. Still, treat it like a password — don't share the environment.
-- **Skill not loading?** The skill is exposed at `.claude/skills/pipeline-capture`
-  as a symlink to the plugin copy. If a run can't find the skill, copy the folder
-  `plugins/pipeline-capture/skills/pipeline-capture/` to `.claude/skills/pipeline-capture/`
-  as real files and re-push.
+- **Skill not loading?** Cloud routines load project skills from `.claude/skills/`
+  in the connected repo, but **only from the repo's *default* branch** (each run
+  clones the default branch fresh). So the skill must be committed to `main`
+  (it is), as **real files** — not a git symlink, which isn't guaranteed to resolve
+  after the cloud clone. If a run still falls back to account skills, confirm the
+  routine is pointed at this repo's default branch and that
+  `.claude/skills/pipeline-capture/SKILL.md` exists there.
 - **Cloud vs. local file reading:** deck/doc synthesis (Phase 2b) is slightly reduced
   in the cloud (no macOS `textutil`); Google Slides/Docs and PDFs still read fine.
 - **First run:** with no cursor yet, the first run backfills the last **90 days** of

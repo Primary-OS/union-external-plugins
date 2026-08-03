@@ -73,7 +73,9 @@ Each surfaced pass becomes one JSON object, sealed to the fund's public key and 
 
 | Field | Required | Notes |
 |---|---|---|
-| `company_name` | yes | From signature / signoff / deck title. Stealth founder with no company: `Founder Name (stealth)` |
+| `founder_linkedin_url` | **anchor** | The founder's personal LinkedIn (`linkedin.com/in/<slug>`). See "Founder anchor" below — **this or `founder_email` is required.** Usually hyperlinked on the founder's name in the email signature |
+| `founder_email` | **anchor** | The founder's email address (normally the sender). **This or `founder_linkedin_url` is required** |
+| `company_name` | no | From signature / signoff / deck title. Optional now — a stealth or pre-company founder has none; leave it null rather than inventing `Founder Name (stealth)` |
 | `domain` | no | Sender domain or URL in body. Null for a stealth pre-company founder |
 | `date_added` | yes | **Earliest** contact date across merged threads (ISO `YYYY-MM-DD`) — when the fund first saw it |
 | `passed_at` | yes | Date the pass signal fired (explicit decline date, or last-contact date for a died/deferred thread) — drives recency |
@@ -81,15 +83,17 @@ Each surfaced pass becomes one JSON object, sealed to the fund's public key and 
 | `pass_reason` | yes | One concrete line: which signal fired, e.g. `Fund replied 'not a fit for us right now' on 2026-07-28` or `Founder sent deck 2026-07-25; no fund reply since` |
 | `stage_signal` | no | `pre_seed` \| `seed` \| `unknown` — best guess at what they were raising |
 | `sector` | no | 1–3 tags |
-| `founder_bio` | no | One line: name, role, prior |
+| `founder_bio` | no | One line: name, role, prior. The core signal a receiving fund evaluates — capture it whenever the signature/thread gives it |
 | `hq_location` | no | From signature |
 | `description` | no | One-line company description (from signature/body, or Phase 2b deck synthesis) |
-| `company_linkedin_url` | no | From body / signature |
+| `company_linkedin_url` | no | The **company** LinkedIn page (`/company/…`) — distinct from `founder_linkedin_url`. From body / signature |
 | `evidence` | yes | Best thread URL + short reason (human-readable; for the manager's audit) |
 | `confidence` | yes | `high` \| `medium` \| `low` — how sure we are it's a pass in scope |
 | `synthesized_from` | no | `slides`\|`doc`\|`pdf`\|`pptx`\|`docx`\|`inline`\|`none` — provenance if `description`/`sector`/`founder_bio` came from a read source |
 
-Every in-scope pass — explicit **and** likely, all confidences — is surfaced. `pass_type` and `confidence` let the manager triage fast (and let Union sort). Only excluded rows are dropped.
+**Founder anchor (the one hard requirement).** Union now anchors a shared deal on the **founder**, not the company — because a pre-seed pass is often a stealth company or a person with no company yet, and what a receiving fund evaluates is the *person* (their LinkedIn / prior). So every surfaced pass must carry **at least one of `founder_linkedin_url` or `founder_email`**; company data is optional enrichment. A candidate that yields neither anchor after extraction (a truly anonymous thread) is **dropped** — Union can't identify or match it. Prefer to capture **both** anchors plus `founder_bio` when the thread gives them; `founder_linkedin_url` is the decisive identity key downstream (it's how Union dedups the same founder across funds), so hunt for it.
+
+Every in-scope pass — explicit **and** likely, all confidences — that has a founder anchor is surfaced. `pass_type` and `confidence` let the manager triage fast (and let Union sort). Excluded rows, and anchorless rows, are dropped.
 
 ---
 
@@ -155,7 +159,11 @@ Process in chunks of 50. For each candidate:
    - `pass_type = explicit` if Pass-A decline language from the fund is present.
    - `pass_type = likely` if: inbound pitch/deck (Pass B) with **no fund follow-up** and the thread has gone quiet; OR an intro (Pass C) that got a non-committal or no reply and died; OR a Pass-D soft deferral with nothing after it; OR a past meeting with no next steps.
 4. **Confidence:** `high` = explicit decline, or a clear died-after-pitch with a real company. `medium` = a solid likely-pass signal. `low` = thin/ambiguous but no active signal (still surface — manager triages).
-5. **Extract** company info (name, domain, stage signal, sector, founder bio, description, LinkedIn) from signature/snippet.
+5. **Extract the founder anchor first, then the rest.** The founder anchor (`founder_linkedin_url` or `founder_email`) is what makes the row shareable — extract it deliberately, not as an afterthought:
+   - **`founder_email`** — normally the founder's **sender address** on their message in the thread (not the fund's address, not a mailing-list address). Take it from the thread participants / `From` header.
+   - **`founder_linkedin_url`** — hunt for the founder's **personal** profile (`linkedin.com/in/<slug>`, not `/company/…`). It's most often **hyperlinked on the founder's name or the word "LinkedIn" in the email signature** — so read the message's **HTML and pull the anchor `href`**, don't rely on visible text alone (the URL frequently isn't shown, only linked). Also check the body and any deck. Normalize to `linkedin.com/in/<slug>`. A `/company/` URL is the **company** page → put it in `company_linkedin_url`, not here.
+   - If, after this, the candidate has **neither** anchor, **drop it** (note the drop in the phase summary) — Union can't identify or match an anchorless deal.
+   Then extract the enrichment: `company_name` (optional now — leave null for a stealth/pre-company founder), `domain`, `stage_signal`, `sector`, `founder_bio` (name, role, prior — the core matching signal), `description`, `hq_location`.
 6. Write the classified pass to `classified.jsonl`. Drop the chunk from memory before the next.
 
 **Progress:** `Phase 2: classified 240 candidates — 31 explicit, 44 likely, 165 excluded`.
@@ -209,12 +217,13 @@ elif path.endswith('.docx'):
 
 ### Phase 3 — Aggregate + build the payload
 
-Stream `classified.jsonl`, dedup on `lower(domain)` else `lower(company_name)` (do **not** auto-merge fuzzy names like "Acme" vs "Acme AI" — flag both). For each merged company:
+Stream `classified.jsonl`, dedup on the **founder anchor**, matching how Union itself keys rows: `lower(founder_linkedin_url)` first, else `lower(founder_email)`, else `lower(domain)`, else `lower(company_name)` (do **not** auto-merge fuzzy names like "Acme" vs "Acme AI", or two different founders who happen to share a company domain — flag both). For each merged founder/deal:
 - `date_added` = MIN(date); `passed_at` = MAX(pass-signal date); `confidence` = MAX; `pass_type` = `explicit` if any merged thread was explicit else `likely`.
+- Prefer a non-null `founder_linkedin_url` / `founder_email` / `company_name` from any merged thread (fill blanks).
 - Join `synthesis.jsonl` by `thread_id`; fill `description`, `sector`, `founder_bio`, `stage_signal`, `synthesized_from` from the richest synthesis.
 - `pass_reason` / `evidence`: the most concrete signal + best thread URL.
 
-Write one row per merged company to `pipeline.csv` in the working directory, with columns matching the payload schema above (`company_name, domain, date_added, passed_at, pass_type, pass_reason, stage_signal, sector, founder_bio, hq_location, description, company_linkedin_url, evidence, confidence, synthesized_from`). `union.py publish` reads this CSV and seals each row to the fund's key. Then run Deliver.
+Write one row per merged founder/deal to `pipeline.csv` in the working directory, with columns matching the payload schema above (`founder_linkedin_url, founder_email, company_name, domain, date_added, passed_at, pass_type, pass_reason, stage_signal, sector, founder_bio, hq_location, description, company_linkedin_url, evidence, confidence, synthesized_from`). Every written row must carry a founder anchor. `union.py publish` reads this CSV and seals each row to the fund's key. Then run Deliver.
 
 ---
 

@@ -259,6 +259,7 @@ Generate one `RUN_ID` at the start (e.g. `run-<something-unique>`) and reuse it 
   ```
 - **On any halt:** `python3 "$UNION_PY" telemetry run_failed --run-id "$RUN_ID" --phase <phase> --error "<one-line class>" || true`
 - **On success:** you emit nothing — `union.py publish` auto-emits `run_completed` with the count. Pass it the same `--run-id`.
+- **On a clean run with zero passes to publish** (nothing sealed — so `publish` isn't called, or exits with "no rows"): emit a terminal event yourself so the operator sees a clean finish rather than a run that looks hung — `python3 "$UNION_PY" telemetry run_completed --run-id "$RUN_ID" --deals-published 0 || true`. (An empty `union.py publish` already does this, so it's harmless if both fire.)
 
 Always append `|| true` so a telemetry call can never break the run.
 

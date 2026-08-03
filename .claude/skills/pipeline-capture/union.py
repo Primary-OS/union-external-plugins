@@ -278,6 +278,14 @@ def cmd_publish(args):
 
     if not rows:
         print("⚠️  No rows to publish (empty pipeline.csv).", file=sys.stderr)
+        # A legitimately empty run still *completed* — emit a terminal event with a
+        # zero count so the operator can tell "ran, found nothing" apart from
+        # "crashed mid-run" (which shows only run_started).
+        _emit_telemetry(cfg, "run_completed", {
+            "run_id": args.run_id,
+            "mode": "sync" if args.sync else None,
+            "deals_published": 0,
+        })
         return 1
 
     if not _ensure_nacl():

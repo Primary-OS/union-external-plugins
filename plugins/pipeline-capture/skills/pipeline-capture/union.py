@@ -63,11 +63,26 @@ PROVENANCE_MAP = {
 
 
 def _load_config():
+    cfg = {}
     try:
         with open(CONFIG_PATH) as f:
-            return json.load(f)
+            cfg = json.load(f)
     except FileNotFoundError:
-        return None
+        cfg = {}
+    # Environment overrides — lets a scheduled cloud routine supply the connection
+    # as secrets/env vars, with no interactive `connect` step. Env wins over file.
+    env_map = {
+        "UNION_INGEST_URL": "ingest_url",
+        "UNION_APP_URL": "app_url",
+        "UNION_INGEST_TOKEN": "token",
+        "UNION_ANON_KEY": "anon_key",
+        "UNION_FUND_NAME": "fund_name",
+    }
+    for env_key, cfg_key in env_map.items():
+        v = os.environ.get(env_key)
+        if v:
+            cfg[cfg_key] = v.rstrip("/") if cfg_key.endswith("url") else v
+    return cfg or None
 
 
 def _save_config(cfg):
@@ -113,8 +128,22 @@ def cmd_connect(args):
 
 def cmd_cursor(args):
     cfg = _load_config()
+    # Local cursor first (interactive installs persist it across runs).
     if cfg and cfg.get("last_pulled_at"):
         print(cfg["last_pulled_at"])
+        return 0
+    # Stateless fallback for scheduled cloud routines (fresh sandbox each run, no
+    # local state): ask the server for the last publish time and resume from its
+    # date. Best-effort — silence on any failure means "no cursor → full run".
+    if cfg and cfg.get("token") and cfg.get("ingest_url"):
+        try:
+            req = urllib.request.Request(cfg["ingest_url"], headers=_ingest_headers(cfg), method="GET")
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                last = json.loads(resp.read().decode("utf-8")).get("last_submission_at")
+            if last:
+                print(last[:10])  # YYYY-MM-DD
+        except Exception:
+            pass
     return 0
 
 

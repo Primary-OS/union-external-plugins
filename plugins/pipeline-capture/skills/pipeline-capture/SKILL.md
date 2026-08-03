@@ -100,7 +100,7 @@ All deals — high, medium, **and** low confidence — go into a single `pipelin
    - `/pipeline-capture 2025-01-01 2025-03-31` → explicit range (good for a first validation run)
    - `/pipeline-capture sync` → **incremental pull** (recurring). First locate the bundled helper (it ships with this skill; works for both a plugin install and a `~/.claude/skills/` install):
      ```bash
-     UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
+     UNION_PY=$(find ~/.claude . "$PWD" -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
      ```
      Read the cursor with `python3 "$UNION_PY" cursor`; set the start date to that value **minus a 3-day overlap buffer** (re-staging an overlapping day is harmless — Union dedups on commit) and the end date to today. If the cursor is empty (never published), treat `sync` as a normal full default run. Tell the user the resolved incremental window in one line. (Resolve `UNION_PY` once and reuse the absolute path in later steps.)
    - Natural-language phrasings also valid; resolve to an ISO date range before scanning, then confirm with the user.
@@ -486,7 +486,7 @@ The pipeline never leaves the machine as raw email — only the structured rows 
 **Always try the Union publish first** (locate the bundled helper the same way as the `sync` step — works for plugin and `~/.claude/skills/` installs):
 
 ```bash
-UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
+UNION_PY=$(find ~/.claude . "$PWD" -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
 python3 "$UNION_PY" publish
 ```
 

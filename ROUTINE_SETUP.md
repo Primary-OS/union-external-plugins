@@ -1,13 +1,15 @@
 # Run pipeline-capture as a scheduled cloud routine
 
-This sets up **pipeline-capture to run on Anthropic's cloud on a schedule** — so
-your pipeline is captured, encrypted, and sent to your private Union review queue
-automatically, even with your laptop closed. It runs in *your* Claude account,
-under *your* Google login; Primary never touches your inbox, and every deal is
-encrypted to a key only you hold before it leaves Anthropic's cloud.
+This sets up **pipeline-capture to run on Anthropic's cloud twice a week** — so the
+deals you've recently **passed on** (and that are likely still raising) are found,
+encrypted, and sent to your private Union review queue automatically, even with your
+laptop closed. It runs in *your* Claude account, under *your* Google login; Primary
+never touches your inbox, and every deal is encrypted to a key only you hold before
+it leaves Anthropic's cloud. You then approve which passed deals to actually share.
 
-The interactive version (`/pipeline-capture` in Claude Code) still works and is a
-fine way to do a first full backfill. The routine is for hands-off recurring pulls.
+The interactive version (`/pipeline-capture since <date>` in Claude Code) still works
+and is a fine way to do a first backfill of recent passes. The routine is for
+hands-off recurring pulls.
 
 ## Before you start (once)
 1. **Finish Union web onboarding and set your encryption passphrase.** The routine
@@ -19,16 +21,20 @@ fine way to do a first full backfill. The routine is for hands-off recurring pul
 ## Create the routine
 1. Go to **claude.ai/code/routines → New routine**.
 2. **Instructions (the prompt):**
-   > Use the **pipeline-capture** skill in **sync** mode. Scan my Gmail and Google
-   > Calendar for new deal-flow since my last run, build my pipeline, and publish
-   > it to my private Union queue (it encrypts each deal to my fund's key before
-   > sending). Then stop — I'll review and approve in Union myself. Do not email
-   > anyone.
+   > Use the **pipeline-capture** skill in **sync** mode. Scan my Gmail since my last
+   > run for deals I've recently **passed on** where the company is likely still
+   > raising, and publish them to my private Union queue (it encrypts each deal to my
+   > fund's key before sending). Include *likely* passes, not just explicit ones —
+   > I'll reject any that aren't real passes when I review. Never surface deals I'm
+   > still actively working. Then stop — I review and approve in Union myself. Do not
+   > email anyone but me.
 3. **Add repository:** select the repo that contains `.claude/skills/pipeline-capture/`
    (this one, `union-external-plugins`).
 4. **Connectors:** check **Gmail** and **Google Calendar** (and **Google Drive** if
    you want deck/doc reading). Click through the Google consent screens if prompted.
-5. **Trigger:** **Schedule → Daily** at a time you like (e.g. 8:00 AM).
+5. **Trigger:** **Schedule → Twice a week** (e.g. Monday & Thursday, 8:00 AM). Twice
+   weekly keeps each review pile small while still catching passes while they're fresh
+   — don't set it to daily; the wider "likely pass" net is calibrated for this cadence.
 6. **Environment** (click the cloud icon under Instructions → settings gear):
    - **Network access:** **Custom**. Under **Allowed domains** add your ingest host,
      e.g. `trjuiqcygeycenjvgovz.supabase.co`. Also tick **include default package
@@ -47,12 +53,15 @@ fine way to do a first full backfill. The routine is for hands-off recurring pul
 7. **Create**, then click **Run now** to test immediately (don't wait for the schedule).
 
 ## What a run does
-Reads only *new* mail/events since your last publish (the resume point comes from
-the server, so it works even though each cloud run is a fresh sandbox), reconstructs
-your pipeline, **seals every deal to your public key**, and POSTs the ciphertext to
-your Union queue. It prints a `REVIEW_URL` (your `/review` page). Open Union, unlock
-with your passphrase, and approve what you want to share. Nothing is readable by
-Primary until you approve.
+Reads only *new* mail since your last publish (the resume point comes from the
+server, so it works even though each cloud run is a fresh sandbox), finds deals you
+**recently passed on** that look like they're still raising, **seals each one to
+your public key**, and POSTs the ciphertext to your Union queue. It prints a
+`REVIEW_URL` (your `/review` page). Open Union, unlock with your passphrase, and
+approve the ones worth sharing — **reject anything that isn't actually a pass or
+isn't still live.** The routine casts a wide net on purpose (it would rather show
+you a maybe-pass than miss a real one), so expect to reject some; that's the design.
+Nothing is readable by Primary until you approve.
 
 ## What the operator (Primary) can see
 The routine reports lightweight **operational telemetry** — that a run happened,
@@ -71,7 +80,12 @@ nothing extra to configure.
   as a symlink to the plugin copy. If a run can't find the skill, copy the folder
   `plugins/pipeline-capture/skills/pipeline-capture/` to `.claude/skills/pipeline-capture/`
   as real files and re-push.
-- **Cloud vs. local file reading:** deck/doc synthesis (Phase 4b) is slightly reduced
+- **Cloud vs. local file reading:** deck/doc synthesis (Phase 2b) is slightly reduced
   in the cloud (no macOS `textutil`); Google Slides/Docs and PDFs still read fine.
-- **First-time backfill:** for the initial multi-year scan, run the interactive
-  `/pipeline-capture <start> <end>` once; let the routine handle the daily deltas.
+- **First run:** with no cursor yet, the first run backfills the last **90 days** of
+  passes (recent enough to still be live). To scan a specific earlier window once, run
+  the interactive `/pipeline-capture since <date>`; then let the twice-weekly routine
+  handle the deltas.
+- **Expect to reject some:** the routine deliberately surfaces *likely* passes, not
+  only explicit ones, so a few won't be real passes (or won't still be raising). One
+  click to reject. Missing a real passed deal is the error we optimize against.

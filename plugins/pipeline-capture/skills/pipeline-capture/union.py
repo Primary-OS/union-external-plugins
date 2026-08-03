@@ -42,27 +42,30 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "pipeline-capture.json")
 
 # Bump with the plugin version — reported in telemetry so Primary can see which
 # funds are running which build without touching any deal content.
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
-# pipeline.csv column -> §7.1 ingest field. Provenance columns (confidence,
-# evidence, etc.) ride along in the row and surface in Union's row-detail drawer.
+# pipeline.csv column -> sealed payload field. This is the passed-deal schema
+# (see SKILL.md "Output — the sealed deal payload"): each row is one deal the fund
+# passed on, and pass_type / pass_reason / passed_at let the manager triage it in
+# Union. Everything here is sealed to the fund's key before it leaves the machine.
 FIELD_MAP = {
     "company_name": "company_name",
     "domain": "domain",
-    "date": "date_added",
-    "defined_date": "defined_at",
-    "status": "status",
+    "date_added": "date_added",
+    "passed_at": "passed_at",
+    "pass_type": "pass_type",
+    "pass_reason": "pass_reason",
+    "stage_signal": "stage_signal",
     "sector": "sector",
     "founder_bio": "founder_bio",
-    "investors": "investors",
     "hq_location": "hq_location",
 }
 PROVENANCE_MAP = {
     "confidence": "confidence",
-    "confidence_reason": "confidence_reason",
-    "source_evidence": "evidence",
+    "evidence": "evidence",
     "synthesized_from": "synthesized_from",
-    "description_short": "description",
+    "description": "description",
+    "company_linkedin_url": "company_linkedin_url",
 }
 
 

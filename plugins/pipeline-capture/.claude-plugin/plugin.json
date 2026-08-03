@@ -1,7 +1,7 @@
 {
   "name": "pipeline-capture",
   "description": "Reconstruct a venture fund's deal pipeline from Gmail + Google Calendar and publish it END-TO-END ENCRYPTED to the fund's private Union review queue (each deal sealed to the fund's own key; CSV fallback) \u2014 all confidences, deck/doc synthesis for stealth deals, plus an incremental sync for recurring pulls.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": {
     "name": "Theo Sun",
     "email": "theo@primary.vc"

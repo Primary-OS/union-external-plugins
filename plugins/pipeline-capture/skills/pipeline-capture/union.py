@@ -40,6 +40,10 @@ from datetime import date, datetime, timezone
 CONFIG_DIR = os.path.expanduser("~/.config/union")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "pipeline-capture.json")
 
+# Bump with the plugin version — reported in telemetry so Primary can see which
+# funds are running which build without touching any deal content.
+VERSION = "1.3.0"
+
 # pipeline.csv column -> §7.1 ingest field. Provenance columns (confidence,
 # evidence, etc.) ride along in the row and surface in Union's row-detail drawer.
 FIELD_MAP = {
@@ -189,6 +193,49 @@ def _ingest_headers(cfg):
     return headers
 
 
+def _emit_telemetry(cfg, event, fields=None):
+    """POST a run event to /ingest/telemetry. Metadata only — never deal content.
+    Best-effort: a telemetry failure must never fail or slow a real capture, so we
+    swallow every error. Returns True on success (used by the CLI for exit codes)."""
+    if not cfg or not cfg.get("token") or not cfg.get("ingest_url"):
+        return False
+    body = {"event": event, "plugin_version": VERSION}
+    for k, v in (fields or {}).items():
+        if v is not None:
+            body[k] = v
+    url = cfg["ingest_url"].rstrip("/") + "/telemetry"
+    headers = {**_ingest_headers(cfg), "Content-Type": "application/json"}
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+                                     headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except Exception:
+        return False
+
+
+def cmd_telemetry(args):
+    """Explicit telemetry event (the skill calls this at run start and on failure).
+    Never errors out the routine — always exits 0."""
+    cfg = _load_config()
+    fields = {
+        "run_id": args.run_id,
+        "phase": args.phase,
+        "status": args.status,
+        "mode": args.mode,
+        "threads_scanned": args.threads_scanned,
+        "candidates_found": args.candidates_found,
+        "deals_published": args.deals_published,
+        "sources_synthesized": args.sources_synthesized,
+        "window_start": args.window_start,
+        "window_end": args.window_end,
+        "duration_ms": args.duration_ms,
+        "error": args.error,
+    }
+    _emit_telemetry(cfg, args.event, fields)
+    return 0
+
+
 def _get_public_key(cfg):
     """GET the fund's public key from the ingest endpoint (base64 X25519)."""
     req = urllib.request.Request(cfg["ingest_url"], headers=_ingest_headers(cfg), method="GET")
@@ -282,6 +329,15 @@ def cmd_publish(args):
     cfg["last_pulled_at"] = date.today().isoformat()
     _save_config(cfg)
 
+    # Operational telemetry — record the successful publish (count only, no
+    # content). Best-effort; never blocks the return. run_id (if the skill passed
+    # one via --run-id) links this to the run_started event.
+    _emit_telemetry(cfg, "run_completed", {
+        "run_id": args.run_id,
+        "mode": "sync" if args.sync else None,
+        "deals_published": stored,
+    })
+
     print(f"✅ Encrypted and sent {stored} deal(s) to your Union queue. Only you can read them.")
     print(f"   Unlock with your passphrase to review and choose what to share:")
     print(f"REVIEW_URL: {review_url}")
@@ -310,7 +366,28 @@ def main():
 
     c = sub.add_parser("connect"); c.add_argument("code"); c.set_defaults(fn=cmd_connect)
     sub.add_parser("cursor").set_defaults(fn=cmd_cursor)
-    pub = sub.add_parser("publish"); pub.add_argument("csv", nargs="?"); pub.set_defaults(fn=cmd_publish)
+    pub = sub.add_parser("publish")
+    pub.add_argument("csv", nargs="?")
+    pub.add_argument("--run-id", dest="run_id", default=None)
+    pub.add_argument("--sync", action="store_true")
+    pub.set_defaults(fn=cmd_publish)
+
+    # telemetry: metadata-only run event; emitted by the skill at start/failure.
+    t = sub.add_parser("telemetry")
+    t.add_argument("event", choices=["run_started", "run_completed", "run_failed", "heartbeat"])
+    t.add_argument("--run-id", dest="run_id", default=None)
+    t.add_argument("--phase", default=None)
+    t.add_argument("--status", default=None)
+    t.add_argument("--mode", default=None)
+    t.add_argument("--threads-scanned", dest="threads_scanned", type=int, default=None)
+    t.add_argument("--candidates-found", dest="candidates_found", type=int, default=None)
+    t.add_argument("--deals-published", dest="deals_published", type=int, default=None)
+    t.add_argument("--sources-synthesized", dest="sources_synthesized", type=int, default=None)
+    t.add_argument("--window-start", dest="window_start", default=None)
+    t.add_argument("--window-end", dest="window_end", default=None)
+    t.add_argument("--duration-ms", dest="duration_ms", type=int, default=None)
+    t.add_argument("--error", default=None)
+    t.set_defaults(fn=cmd_telemetry)
 
     m = sub.add_parser("mint")
     m.add_argument("--ingest-url", dest="ingest_url", required=True)

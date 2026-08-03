@@ -487,10 +487,10 @@ The pipeline never leaves the machine as raw email — only the structured rows 
 
 ```bash
 UNION_PY=$(find ~/.claude . "$PWD" -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
-python3 "$UNION_PY" publish
+python3 "$UNION_PY" publish --run-id "$RUN_ID"   # add --sync on incremental runs
 ```
 
-(Run it from the working directory so it finds `pipeline.csv`, or pass the path. First run auto-installs PyNaCl for the encryption — one-time.) Then branch on the exit code / output:
+(Run it from the working directory so it finds `pipeline.csv`, or pass the path. First run auto-installs PyNaCl for the encryption — one-time. Passing `--run-id` lets the auto-emitted `run_completed` telemetry correlate with this run's `run_started`; omit it and publish still works.) Then branch on the exit code / output:
 
 - **Exit 0 (published).** stdout carries `REVIEW_URL:` and `STORED:` lines. Do all of:
   1. Tell the user, in one line: `✅ Encrypted & sent <STORED> deals to your private Union queue — only you can read them. Unlock with your passphrase to review & approve: <REVIEW_URL>`. Nothing is readable by Primary or the network until they unlock and approve.
@@ -540,6 +540,22 @@ This skill runs **unattended** on a VC's machine for 10–60 minutes across hund
 1. **Bounded retries.** Any single operation (a search, thread fetch, Drive read, Bash call) retries **at most twice** with short backoff, then follows the decision table. Never debug a failure open-endedly, and never attempt a third retry.
 2. **Item failures never stop the run.** A single failed thread, calendar event, or deck is skipped and logged; the phase continues. Only *phase-level* failures (auth, context exhaustion, oversized query) halt the run.
 3. **One-command resume.** When the run must stop, write `pipeline_state.json`, print one plain-language line, and give the VC the single command to resume — `/pipeline-capture`. No flags, no multi-step recovery.
+4. **Emit a `run_failed` telemetry event on any halt** (see Operational telemetry below), passing the phase and a one-line error class. It's best-effort and never changes the halt behavior — if it fails, halt anyway.
+
+## Operational telemetry (routine runs)
+
+So the operator (Primary) can see *that* a fund's routine ran and how much it moved — never *what* moved — emit run events via `union.py`. This is **metadata only** (counts, timing, phase, error class); it carries no company, founder, or deal content, and the server drops any field outside its fixed set. It is always **best-effort**: a telemetry failure must never fail, slow, or block a capture. Skip it entirely when not connected to Union (local-CSV-only runs).
+
+Generate one `RUN_ID` at the start (e.g. `run-$(date +%s)` or any short unique string) and reuse it for the whole run so start/complete/fail correlate.
+
+- **At run start** (right after resolving the window, only when connected):
+  ```bash
+  python3 "$UNION_PY" telemetry run_started --run-id "$RUN_ID" --mode <sync|full|backfill> --window-start <start> --window-end <end> || true
+  ```
+- **On any halt** (decision table): `python3 "$UNION_PY" telemetry run_failed --run-id "$RUN_ID" --phase <phase> --error "<one-line class>" || true`
+- **On success:** you don't emit anything — `union.py publish` auto-emits `run_completed` with the published count. Pass it the same run id: `python3 "$UNION_PY" publish --run-id "$RUN_ID" --sync` (add `--sync` on incremental runs).
+
+Always append `|| true` so a telemetry call can never break the run.
 
 ### Decision table — match the error, apply the response, do not reason from scratch
 

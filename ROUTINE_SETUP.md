@@ -54,6 +54,15 @@ your Union queue. It prints a `REVIEW_URL` (your `/review` page). Open Union, un
 with your passphrase, and approve what you want to share. Nothing is readable by
 Primary until you approve.
 
+## What the operator (Primary) can see
+The routine reports lightweight **operational telemetry** — that a run happened,
+which phase it reached, how many threads it scanned and deals it published, timing,
+and any error class. This is **counts and health only**: it carries no company,
+founder, or deal content, and the server literally has no column to store such a
+thing. It's how Primary knows your routine is alive and working without ever seeing
+what's in your pipeline. It goes to the same ingest host you already allow-listed —
+nothing extra to configure.
+
 ## Notes & gotchas
 - **Env-var secret:** the token is only a *publish* credential for your own fund's
   queue (it can't read anything), and it lives only in your own routine's

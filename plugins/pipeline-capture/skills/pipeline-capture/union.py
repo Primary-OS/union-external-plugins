@@ -49,6 +49,11 @@ VERSION = "1.4.0"
 # passed on, and pass_type / pass_reason / passed_at let the manager triage it in
 # Union. Everything here is sealed to the fund's key before it leaves the machine.
 FIELD_MAP = {
+    # Founder anchor — at least one of these is required per row (see the publish
+    # gate below and SKILL.md "Founder anchor"). Union keys the shared deal on the
+    # founder, so these ride at the front of the payload.
+    "founder_linkedin_url": "founder_linkedin_url",
+    "founder_email": "founder_email",
     "company_name": "company_name",
     "domain": "domain",
     "date_added": "date_added",
@@ -273,7 +278,10 @@ def cmd_publish(args):
             if status == "excluded":
                 continue
             payload = _row_to_payload(r)
-            if payload.get("company_name"):
+            # Admission = a founder anchor (LinkedIn URL or email), NOT a company
+            # name. A stealth / pre-company founder is a first-class shareable row;
+            # an anchorless row can't be identified or matched, so it's dropped.
+            if payload.get("founder_linkedin_url") or payload.get("founder_email"):
                 rows.append(payload)
 
     if not rows:

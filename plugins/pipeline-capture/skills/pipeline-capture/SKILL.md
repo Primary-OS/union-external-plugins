@@ -10,7 +10,7 @@ Surface the deals a fund **recently passed on**, where the company is **plausibl
 
 **Why "passed" and not the whole pipeline.** A fund's live and won deals are its crown jewels; it would never share those. But a deal it *passed on* costs nothing to pass along — and is genuinely useful to another fund whose thesis fits. So this routine captures **only passes**, and never a deal that's still active or already closed.
 
-**Why "recently" and "still raising."** A pass from four years ago is dead — that company isn't raising anymore. A pass from the last few days is live: to the fund's knowledge that founder is still looking for their pre-seed/seed. The twice-weekly incremental cadence does most of this for free — each run only looks at mail since the last run, so "passed this week" is simply what it sees. A separate "have they already raised?" check happens later, at review time in Union (see Relevance below) — not in this routine.
+**Why "recently" and "still raising."** A pass from four years ago is dead — that company isn't raising anymore. A pass from the last few days is live: to the fund's knowledge that founder is still looking for their pre-seed/seed. The twice-weekly incremental cadence does most of this for free — each run only looks at mail since the last run, so "passed this week" is simply what it sees. The other relevance signal — whether the round has **already closed** — comes from the **email itself** during classification (see Relevance below), not from any external deal database (PitchBook and the like lag private pre-seed/seed rounds too much to trust).
 
 **Recall over precision — this is a deliberate stance.** When a thread *might* be a pass, **include it** and let the manager reject it in Union. Missing a real passed deal is silent and unrecoverable; a false positive costs the manager one click. So this routine flags **likely** passes, not only explicit ones. Twice a week, the review pile stays small enough that a wide net is not a burden.
 
@@ -27,7 +27,8 @@ Surface the deals a fund **recently passed on**, where the company is **plausibl
 
 **Excluded — never surface:**
 - **Live / active** — recent two-way back-and-forth, a **future** calendar event, diligence in progress ("data room", "references", "term sheet", "next steps" within the recent window). If it's still moving, it is not a pass.
-- **Closed / won** — "signed", "wired", "welcome to the portfolio", portfolio company. That's an investment, not a pass.
+- **Round already closed** — the thread says the raise is **done**: "we've closed our round", "round is oversubscribed", "round is full", "completed our raise", "finished fundraising", "we're oversubscribed". A closed round can't be invested in, so there's nothing to share. **This is the only "already raised?" check** — it comes from the email, not a database. If it's *ambiguous* whether the round is closed or merely closing ("closing soon", "wrapping up the round", "final spots"), keep it as a likely pass and note the uncertainty in `pass_reason` — never drop a possibly-live deal on a misread.
+- **Closed / won (by this fund)** — "signed", "wired", "welcome to the portfolio", portfolio company. That's an investment, not a pass.
 - **Not a deal** — investor-to-investor chatter with no founder, service providers (legal, recruiting, banking, fund admin), newsletters / mass mail, cold sales into the fund, internal team threads.
 - **Out of stage** — clearly not a pre-seed/seed company (late-stage, public, not a company).
 
@@ -146,6 +147,7 @@ Process in chunks of 50. For each candidate:
 1. **Fetch** the thread's subject, participants, dates, and a snippet of the first + last message (fetch the body only when genuinely on the border — budget ≤5% of threads; never store bodies).
 2. **Exclude first** — drop the candidate if any of:
    - **Live:** the last message in the thread is recent (within the window) and the fund is still engaging; OR there is a **future** calendar event with the counterparty (light Calendar check by attendee/domain); OR active-diligence language ("data room", "references", "term sheet", "next steps") with recent activity.
+   - **Round closed:** the thread indicates the raise is complete — "closed our round", "oversubscribed", "round is full", "completed/finished our raise". (Ambiguous "closing soon" / "wrapping up" → do **not** exclude; keep as a likely pass and note it in `pass_reason`.) This is the relevance check for "have they already raised?" — read it from the email, never a database.
    - **Won:** "signed", "wired", "welcome to the portfolio", portfolio-company signal.
    - **Not a deal:** investor-to-investor with no founder, service provider, newsletter (`List-Unsubscribe`), cold sales into the fund, internal (all fund-domain) thread.
    - **Out of stage:** clearly not a pre-seed/seed company.
@@ -216,9 +218,14 @@ Write one row per merged company to `pipeline.csv` in the working directory, wit
 
 ---
 
-## Relevance ("still raising?") is decided at review time, not here
+## Relevance ("is the company still raising?")
 
-This routine surfaces **recent** passes — recency is its relevance signal, and the twice-weekly cadence supplies it. The second gauge — **has the company already raised a round** (so they're no longer looking) — is **not** checked here, on purpose: this routine is per-VC and must not depend on PitchBook or any deal database. That check happens in **Union, at review time**, against the reference data Union already holds, and is surfaced to the manager as a flag ("⚠ raised a $3M seed 2 months ago — likely not looking") so they approve only genuinely-live passes. Keep this routine focused on *finding recent passes*; let Union judge whether they've since gone stale.
+Two gauges, both decided **here in the email scan** — no external deal database:
+
+1. **Recency** — supplied by the twice-weekly cadence. Each run only sees mail since the last, so a surfaced pass is a recent one.
+2. **Round not yet closed** — the only trustworthy signal that a company has finished raising is **the email saying so** (PitchBook and other databases lag private pre-seed/seed rounds too much to rely on). During classification, read the thread for a round-closed signal and **exclude** those (a closed round can't be invested in — nothing to share). When it's genuinely ambiguous ("closing soon", "final spots"), keep it as a likely pass and say so in `pass_reason`; don't drop a possibly-live deal on a misread.
+
+That's the whole relevance model: **recent, and not yet closed.** Everything else about whether the company is a good fit is the receiving fund's judgment, downstream in Union.
 
 ---
 

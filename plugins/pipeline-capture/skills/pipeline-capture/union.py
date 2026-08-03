@@ -6,13 +6,16 @@ Ships next to SKILL.md. Whether the skill was installed as a plugin or copied to
     find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1
 then invoke it as `python3 <that path> <subcommand>`.
 
-Bundled with the pipeline-capture skill. Pure python3 stdlib (no pip). Subcommands:
+Bundled with the pipeline-capture skill. python3 stdlib, plus PyNaCl for the
+`publish` step (auto-installed on first use) — publish end-to-end encrypts every
+deal so Primary can't read anything you haven't approved. Subcommands:
 
   connect <code>     Decode a base64 connection code (issued by Primary) and write
                      the local config. Run once during setup.
-  publish [csv]      POST the rows in pipeline.csv to the fund's Union quarantine
-                     queue (default destination). Prints staged/flagged counts +
-                     the review URL, and advances the incremental cursor.
+  publish [csv]      Encrypt each row in pipeline.csv to the fund's public key
+                     (sealed box) and POST the ciphertexts to Union's queue. The
+                     plaintext never leaves this machine. Prints the review URL +
+                     stored count, and advances the incremental cursor.
   cursor             Print the last successful pull date (YYYY-MM-DD) or nothing.
                      The skill uses this to scan only new email on a `sync` run.
   mint ...           Operator-only: build a connection code from a fund's
@@ -47,6 +50,7 @@ FIELD_MAP = {
     "status": "status",
     "sector": "sector",
     "founder_bio": "founder_bio",
+    "investors": "investors",
     "hq_location": "hq_location",
 }
 PROVENANCE_MAP = {
@@ -127,6 +131,51 @@ def _row_to_payload(row):
     return out
 
 
+def _ensure_nacl():
+    """Import PyNaCl (audited libsodium binding); pip-install it once if missing.
+    Publish end-to-end encrypts with a sealed box, so we use real crypto — never
+    a hand-rolled implementation."""
+    try:
+        from nacl.public import PublicKey, SealedBox  # noqa: F401
+        return True
+    except ImportError:
+        import subprocess
+        print("Installing PyNaCl (one-time, for encrypted publish)…", file=sys.stderr)
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pynacl"], check=True)
+            from nacl.public import PublicKey, SealedBox  # noqa: F401
+            return True
+        except Exception as e:
+            print(f"❌ Could not install PyNaCl ({e}). Run: {sys.executable} -m pip install pynacl", file=sys.stderr)
+            return False
+
+
+def _ingest_headers(cfg):
+    headers = {"x-ingest-token": cfg["token"]}
+    # Some Supabase gateways require an apikey even when the function disables JWT
+    # verification — include it if the connection code carried one.
+    if cfg.get("anon_key"):
+        headers["apikey"] = cfg["anon_key"]
+        headers["Authorization"] = f"Bearer {cfg['anon_key']}"
+    return headers
+
+
+def _get_public_key(cfg):
+    """GET the fund's public key from the ingest endpoint (base64 X25519)."""
+    req = urllib.request.Request(cfg["ingest_url"], headers=_ingest_headers(cfg), method="GET")
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read().decode("utf-8"))["public_key"]
+
+
+def _seal(pubkey_b64, payload):
+    """Seal a deal to the fund's public key (libsodium crypto_box_seal). Returns
+    standard base64 — matches what the browser decrypts."""
+    from nacl.public import PublicKey, SealedBox
+    box = SealedBox(PublicKey(base64.b64decode(pubkey_b64)))
+    ct = box.encrypt(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    return base64.b64encode(ct).decode("ascii")
+
+
 def cmd_publish(args):
     cfg = _load_config()
     if not cfg or not cfg.get("token"):
@@ -152,42 +201,62 @@ def cmd_publish(args):
         print("⚠️  No rows to publish (empty pipeline.csv).", file=sys.stderr)
         return 1
 
-    body = json.dumps({"source": "email-agent", "rows": rows}).encode("utf-8")
-    headers = {"Content-Type": "application/json", "x-ingest-token": cfg["token"]}
-    # Some Supabase gateways require an apikey even when the function disables JWT
-    # verification — include it if the connection code carried one.
-    if cfg.get("anon_key"):
-        headers["apikey"] = cfg["anon_key"]
-        headers["Authorization"] = f"Bearer {cfg['anon_key']}"
+    if not _ensure_nacl():
+        return 6
 
-    req = urllib.request.Request(cfg["ingest_url"], data=body, headers=headers, method="POST")
+    # 1. Fetch the fund's public key. Only the public key is needed to encrypt —
+    #    no secret ever lives in this routine.
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
+        public_key = _get_public_key(cfg)
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "ignore")[:300]
-        print(f"❌ Union rejected the upload (HTTP {e.code}): {detail}", file=sys.stderr)
-        if e.code == 401:
-            print("   The token is invalid or revoked — ask Primary to re-issue your connection code.", file=sys.stderr)
+        if e.code == 404:
+            print("❌ Encryption isn't set up for your fund yet. Open Union, set your "
+                  "passphrase in onboarding, then re-run publish.", file=sys.stderr)
+        elif e.code == 401:
+            print("❌ Token invalid or revoked — ask Primary to re-issue your connection code.", file=sys.stderr)
+        else:
+            print(f"❌ Could not fetch your fund key (HTTP {e.code}): {detail}", file=sys.stderr)
         return 4
     except Exception as e:
         print(f"❌ Could not reach Union ({e}). pipeline.csv is kept locally — retry later.", file=sys.stderr)
         return 5
 
-    staged = result.get("staged", 0)
-    flagged = result.get("flagged", 0)
-    import_id = result.get("import_id", "")
-    review_url = f"{cfg['app_url']}/contribute/review/{import_id}" if import_id else cfg["app_url"]
+    # 2. Seal every deal to the public key. Plaintext never leaves this machine.
+    ciphertexts = [_seal(public_key, payload) for payload in rows]
+
+    # 3. POST the ciphertexts (batched to the endpoint's per-call cap).
+    headers = {**_ingest_headers(cfg), "Content-Type": "application/json"}
+    stored = 0
+    BATCH = 2000
+    for i in range(0, len(ciphertexts), BATCH):
+        chunk = ciphertexts[i:i + BATCH]
+        body = json.dumps({"source": "email-agent", "ciphertexts": chunk}).encode("utf-8")
+        req = urllib.request.Request(cfg["ingest_url"], data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            stored += int(result.get("stored", 0))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "ignore")[:300]
+            print(f"❌ Union rejected the upload (HTTP {e.code}): {detail}", file=sys.stderr)
+            if e.code == 401:
+                print("   The token is invalid or revoked — ask Primary to re-issue your connection code.", file=sys.stderr)
+            return 4
+        except Exception as e:
+            print(f"❌ Could not reach Union ({e}). pipeline.csv is kept locally — retry later.", file=sys.stderr)
+            return 5
+
+    review_url = f"{cfg['app_url']}/review"
 
     # Advance the incremental cursor only on a successful publish.
     cfg["last_pulled_at"] = date.today().isoformat()
-    cfg["last_import_id"] = import_id
     _save_config(cfg)
 
-    print(f"✅ Staged {staged} deal(s) in your Union queue" + (f" ({flagged} need a look)" if flagged else "") + ".")
+    print(f"✅ Encrypted and sent {stored} deal(s) to your Union queue. Only you can read them.")
+    print(f"   Unlock with your passphrase to review and choose what to share:")
     print(f"REVIEW_URL: {review_url}")
-    print(f"STAGED: {staged}")
-    print(f"FLAGGED: {flagged}")
+    print(f"STORED: {stored}")
     return 0
 
 

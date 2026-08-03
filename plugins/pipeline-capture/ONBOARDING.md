@@ -1,6 +1,6 @@
 # Pipeline Capture — Setup & Run
 
-This tool reconstructs your deal pipeline from your own Gmail + Google Calendar and publishes it to your **private review queue in Union**, where you decide what to share with Primary. It runs **entirely on your machine, under your own Google login** — Primary never touches your inbox, and nothing reaches Primary or the network until you approve it in Union.
+This tool reconstructs your deal pipeline from your own Gmail + Google Calendar and publishes it to your **private, end-to-end-encrypted review queue in Union**, where you decide what to share with Primary. It runs **entirely on your machine, under your own Google login** — Primary never touches your inbox. Every deal is **encrypted to a key only you hold** before it leaves your machine, so Primary can't read anything until you unlock with your passphrase and approve it in Union.
 
 ---
 
@@ -42,6 +42,7 @@ Note that absolute path and reuse it for every `union.py` call below. (If `find`
 - Ask the user for the **connection code** Primary sent them (one line). If they don't have one, they can still proceed — the tool falls back to producing a CSV — so don't block; just note Union publishing will be skipped.
 - If they paste a code, run: `python3 "$UNION_PY" connect "<code>"`. It writes the fund's ingest URL + token to `~/.config/union/pipeline-capture.json` (token stored private, never in the repo or the CSV). Report the `✅ Connected to Union for <fund>` line back.
 - This is idempotent — re-running with a new code just updates the connection.
+- **One prerequisite for publishing:** the user must have finished Union web onboarding and **set their encryption passphrase** (that's what creates the key deals are encrypted to). If they haven't, `publish` will report that encryption isn't set up yet — have them do it in Union, then re-run. Their passphrase lives only in their browser; the routine only ever needs the fund's public key.
 
 ### Step 2 — Permission allowlist (prevents hundreds of prompts during the run)
 - Read the bundled `settings.allowlist.json` (it sits one level up from `union.py`: ``"$(dirname "$UNION_PY")/../../settings.allowlist.json"`` for a plugin install, or next to `SKILL.md` for a skills-dir install — `find ~/.claude -name settings.allowlist.json -path '*pipeline-capture*' | head -1` finds it either way).

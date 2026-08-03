@@ -481,7 +481,7 @@ Source breakdown:
 
 ## Deliver — publish to Union (default), or CSV + email (fallback)
 
-The pipeline never leaves the machine as raw email — only the structured rows in `pipeline.csv`. The default destination is the fund's **private Union review queue**: the rows stage there, invisible to Primary and the network, until the VC reviews and approves them in Union. The CSV hand-off below is the fallback for funds not yet connected to Union.
+The pipeline never leaves the machine as raw email — only the structured rows in `pipeline.csv`. The default destination is the fund's **private, end-to-end-encrypted Union queue**: `union.py publish` seals **every deal to the fund's own public key** (a libsodium sealed box) before it leaves the machine, so Primary and anyone with database access see only ciphertext. The rows become readable only when the VC unlocks with their passphrase in Union and approves them. The CSV hand-off below is the fallback for funds not yet connected to Union.
 
 **Always try the Union publish first** (locate the bundled helper the same way as the `sync` step — works for plugin and `~/.claude/skills/` installs):
 
@@ -490,14 +490,14 @@ UNION_PY=$(find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null 
 python3 "$UNION_PY" publish
 ```
 
-(Run it from the working directory so it finds `pipeline.csv`, or pass the path.) Then branch on the exit code / output:
+(Run it from the working directory so it finds `pipeline.csv`, or pass the path. First run auto-installs PyNaCl for the encryption — one-time.) Then branch on the exit code / output:
 
-- **Exit 0 (published).** stdout carries `REVIEW_URL:`, `STAGED:`, and `FLAGGED:` lines. Do all of:
-  1. Tell the user, in one line: `✅ Staged <STAGED> deals in your private Union queue (<FLAGGED> need a look) — review & approve here: <REVIEW_URL>`. Nothing is shared with Primary or the network until they approve in Union.
-  2. **Send the VC a self-notification email** (so they're reminded even after they close the terminal). Use the Gmail connector to send — **to the user's own Gmail address** (from the connector profile), not Primary — Subject `Union: <STAGED> deals staged for review`, body one line + the `REVIEW_URL`. Sending to self is safe to send directly (no draft needed); never email Primary the rows — approval is the VC's gate.
+- **Exit 0 (published).** stdout carries `REVIEW_URL:` and `STORED:` lines. Do all of:
+  1. Tell the user, in one line: `✅ Encrypted & sent <STORED> deals to your private Union queue — only you can read them. Unlock with your passphrase to review & approve: <REVIEW_URL>`. Nothing is readable by Primary or the network until they unlock and approve.
+  2. **Send the VC a self-notification email** (so they're reminded even after they close the terminal). Use the Gmail connector to send — **to the user's own Gmail address** (from the connector profile), not Primary — Subject `Union: <STORED> deals ready to review`, body one line + the `REVIEW_URL`. Sending to self is safe to send directly (no draft needed); never email Primary the rows — approval is the VC's gate.
   3. Offer (on demand) to reveal `pipeline.csv` in Finder for their own records, or preview the top 5 rows.
 - **Exit 3 (NOT_CONNECTED).** No Union connection configured → use the **CSV + email-to-Primary fallback** immediately below.
-- **Exit 4 (rejected) / 5 (unreachable).** Relay the script's one-line reason. `pipeline.csv` is intact locally. Offer to (a) retry `union.py publish`, or (b) fall back to emailing the CSV to Primary. For exit 4 with a 401, tell them the token is invalid/revoked and to ask Primary for a fresh connection code.
+- **Exit 4 (rejected) / 5 (unreachable) / 6 (crypto unavailable).** Relay the script's one-line reason. `pipeline.csv` is intact locally. For exit 4 with a 404, the VC hasn't set their encryption passphrase in Union onboarding yet — tell them to do that, then re-run publish. For a 401, the token is invalid/revoked — ask Primary for a fresh connection code. For exit 5/6, offer to retry, or fall back to emailing the CSV to Primary.
 
 ### Fallback — CSV + email to Primary (only when not connected to Union)
 

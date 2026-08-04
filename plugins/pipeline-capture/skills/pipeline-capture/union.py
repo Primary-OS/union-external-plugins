@@ -42,7 +42,7 @@ CONFIG_PATH = os.path.join(CONFIG_DIR, "pipeline-capture.json")
 
 # Bump with the plugin version — reported in telemetry so Primary can see which
 # funds are running which build without touching any deal content.
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 # pipeline.csv column -> sealed payload field. This is the passed-deal schema
 # (see SKILL.md "Output — the sealed deal payload"): each row is one deal the fund

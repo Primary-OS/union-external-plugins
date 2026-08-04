@@ -85,7 +85,7 @@ nothing extra to configure.
   `.claude/skills/pipeline-capture/SKILL.md` exists there.
 - **Cloud vs. local file reading:** deck/doc synthesis (Phase 2b) is slightly reduced
   in the cloud (no macOS `textutil`); Google Slides/Docs and PDFs still read fine.
-- **First run:** with no cursor yet, the first run backfills the last **90 days** of
+- **First run:** with no cursor yet, the first run backfills the last **60 days** of
   passes (recent enough to still be live). To scan a specific earlier window once, run
   the interactive `/pipeline-capture since <date>`; then let the twice-weekly routine
   handle the deltas.

@@ -1,6 +1,6 @@
 {
   "name": "pipeline-capture",
-  "description": "Twice-weekly scan of a VC's Gmail to surface deals the fund RECENTLY PASSED ON and that the company is likely still raising for \u2014 sealed end-to-end to the fund's own private Union review queue, where the manager approves what to share. Recall-biased: flags likely passes, not only explicit ones; live and won deals are never surfaced. Incremental sync on a stored cursor; deck/doc synthesis describes stealth passes.",
+  "description": "Weekly scan of a VC's Gmail to surface deals the fund RECENTLY PASSED ON and that the company is likely still raising for, added to the fund's own private Union review queue, where the manager approves what to share. Recall-biased: flags likely passes, not only explicit ones; live and won deals are never surfaced. Incremental sync on a stored cursor; deck/doc synthesis describes stealth passes.",
   "version": "1.4.0",
   "author": {
     "name": "Theo Sun",

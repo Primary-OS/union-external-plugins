@@ -1,18 +1,18 @@
 ---
 name: pipeline-capture
-description: Twice-weekly scan of a VC's Gmail (plus a light Google Calendar check) to surface deals the fund RECENTLY PASSED ON where the company is likely still raising a pre-seed/seed round — sealed end-to-end to the fund's OWN private Union review queue, where the manager approves what to share. Recall-biased on purpose: it flags LIKELY passes (founder pitched then the thread died, a meeting that went nowhere, a soft "keep us posted" deferral), not only explicit "we're passing" emails — the manager rejects the false positives in Union. Live deals (active back-and-forth, a future meeting, diligence in progress) and won/closed deals are never surfaced. Runs incrementally on a stored cursor; deck/doc synthesis describes stealth passes. Use when the user says "scan my passed deals", "find recent passes", "/pipeline-capture", or "/pipeline-capture sync". Default is an incremental sync; accepts an explicit date range for a first backfill (e.g. "since 2026-05-01").
+description: Weekly scan of a VC's Gmail (plus a light Google Calendar check) to surface deals the fund RECENTLY PASSED ON where the company is likely still raising a pre-seed/seed round, and add them to the fund's OWN private Union review queue, where the manager approves what to share. Recall-biased on purpose: it flags LIKELY passes (founder pitched then the thread died, a meeting that went nowhere, a soft "keep us posted" deferral), not only explicit "we're passing" emails — the manager rejects the false positives in Union. Live deals (active back-and-forth, a future meeting, diligence in progress) and won/closed deals are never surfaced. Runs incrementally on a stored cursor; deck/doc synthesis describes stealth passes. Use when the user says "scan my passed deals", "find recent passes", "/pipeline-capture", or "/pipeline-capture sync". Default is an incremental sync; accepts an explicit date range for a first backfill (e.g. "since 2026-05-01").
 argument-hint: "sync | [start-date] [end-date]"
 ---
 
 # Pipeline Capture — recently-passed, still-live deals
 
-Surface the deals a fund **recently passed on**, where the company is **plausibly still raising**, into the manager's **own end-to-end-encrypted Union queue**. The manager unlocks, reviews, and approves which of those passed deals to share back into the Union network; anything they don't approve is never readable by Primary or anyone else. This routine's whole job is to find good passed-deal candidates and hand them to the manager — nothing it produces is shared with anyone until the manager approves it in Union.
+Surface the deals a fund **recently passed on**, where the company is **plausibly still raising**, into the manager's **own private Union review queue**. The manager unlocks, reviews, and approves which of those passed deals to share back into the Union network; anything they don't approve is never readable by Primary or anyone else. This routine's whole job is to find good passed-deal candidates and hand them to the manager — nothing it produces is shared with anyone until the manager approves it in Union.
 
 **Why "passed" and not the whole pipeline.** A fund's live and won deals are its crown jewels; it would never share those. But a deal it *passed on* costs nothing to pass along — and is genuinely useful to another fund whose thesis fits. So this routine captures **only passes**, and never a deal that's still active or already closed.
 
-**Why "recently" and "still raising."** A pass from four years ago is dead — that company isn't raising anymore. A pass from the last few days is live: to the fund's knowledge that founder is still looking for their pre-seed/seed. The twice-weekly incremental cadence does most of this for free — each run only looks at mail since the last run, so "passed this week" is simply what it sees. The other relevance signal — whether the round has **already closed** — comes from the **email itself** during classification (see Relevance below), not from any external deal database (PitchBook and the like lag private pre-seed/seed rounds too much to trust).
+**Why "recently" and "still raising."** A pass from four years ago is dead — that company isn't raising anymore. A pass from the last few days is live: to the fund's knowledge that founder is still looking for their pre-seed/seed. The weekly incremental cadence does most of this for free — each run only looks at mail since the last run, so "passed this week" is simply what it sees. The other relevance signal — whether the round has **already closed** — comes from the **email itself** during classification (see Relevance below), not from any external deal database (PitchBook and the like lag private pre-seed/seed rounds too much to trust).
 
-**Recall over precision — this is a deliberate stance.** When a thread *might* be a pass, **include it** and let the manager reject it in Union. Missing a real passed deal is silent and unrecoverable; a false positive costs the manager one click. So this routine flags **likely** passes, not only explicit ones. Twice a week, the review pile stays small enough that a wide net is not a burden.
+**Recall over precision — this is a deliberate stance.** When a thread *might* be a pass, **include it** and let the manager reject it in Union. Missing a real passed deal is silent and unrecoverable; a false positive costs the manager one click. So this routine flags **likely** passes, not only explicit ones. Run weekly, the review pile stays small enough that a wide net is not a burden.
 
 ## What counts as in-scope (a pass) vs. out
 
@@ -41,7 +41,7 @@ You run inside **Claude Code** (interactive) or an **Anthropic cloud Routine** (
 1. Verify the connectors are connected. **Gmail** exposes search-threads / read-thread / read-profile tools; **Google Calendar** exposes list-events / read-event; **Google Drive** (only for deck/doc synthesis) exposes search / metadata / read-content. If Gmail is not connected, tell the user to enable it (Claude Code → Settings → Connectors, or the routine's Connectors panel) and stop. Calendar is used only as a light exclusion check — if absent, proceed and note it. Drive is only for deck synthesis — if absent, skip that phase with a warning.
    - **Office-file extraction is dependency-free**: `.pptx`/`.docx` via python3 stdlib (`zipfile` + `xml`); `.docx` also via macOS `textutil` when present (local installs only — not in the cloud). PDFs are read visually by the built-in Read tool. Google Slides/Docs are read through the Drive connector. No LibreOffice, no `pip install` for extraction.
 2. Discover exact tool names dynamically — do not hardcode. Use whatever the active connectors expose (search / list / get patterns).
-3. Intermediate files go to the working directory (or the sandbox's cwd in a routine). The deliverable is not a file — it's the sealed publish to Union (see Deliver).
+3. Intermediate files go to the working directory (or the sandbox's cwd in a routine). The deliverable is not a file — it's the hand-off to the Union review queue (see Deliver).
 
 ## Execution model — orchestrator + subagents
 
@@ -63,13 +63,13 @@ Append to **every** Gmail search. Drops the mass-mail / notification noise no fo
 
 Per-fund extension: if `pipeline_state.json` has `excluded_domains`, append `-from:@<domain>` for each. The routine learns the fund's noise set over runs.
 
-You never exfiltrate raw email content — the sealed payload carries structured fields (company, why-we-think-it's-a-pass, a paraphrased description), plus thread URLs for the manager's own audit. Nothing is shared with anyone until the manager approves in Union.
+Raw email content never leaves the VC's own session — only structured fields (company, why-we-think-it's-a-pass, a paraphrased description), plus thread URLs for the manager's own audit, are handed off. Nothing is shared with anyone until the manager approves in Union.
 
 ---
 
-## Output — the sealed deal payload
+## Output — the deal record
 
-Each surfaced pass becomes one JSON object, sealed to the fund's public key and sent to Union. Fields:
+Each surfaced pass becomes one JSON object, handed to the Union review queue by the sync tool. Fields:
 
 | Field | Required | Notes |
 |---|---|---|
@@ -105,7 +105,7 @@ Every in-scope pass — explicit **and** likely, all confidences — that has a 
    ```bash
    UNION_PY=$(find ~/.claude . "$PWD" -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1)
    ```
-   - **`sync` (the default, and what the twice-weekly routine runs):** read the cursor with `python3 "$UNION_PY" cursor`; set the start date to that value **minus a 4-day overlap buffer** (twice-weekly runs are ~3–4 days apart; re-staging an overlapping day is harmless — Union dedups on approve) and the end date to today. If the cursor is empty (first run ever), fall back to a **60-day backfill** (start = today − 60d) so the first run captures the recent passes that are still live, without dredging up years of dead ones. State the resolved window in one line.
+   - **`sync` (the default, and what the weekly routine runs):** read the cursor with `python3 "$UNION_PY" cursor`; set the start date to that value **minus a 4-day overlap buffer** (weekly runs are ~7 days apart; re-staging a few overlapping days is harmless — Union dedups on approve) and the end date to today. If the cursor is empty (first run ever), fall back to a **60-day backfill** (start = today − 60d) so the first run captures the recent passes that are still live, without dredging up years of dead ones. State the resolved window in one line.
    - **Explicit range** (`/pipeline-capture since 2026-05-01`, `/pipeline-capture 2026-05-01 2026-07-01`): use it verbatim — for a deliberate one-off backfill. Resolve natural language to ISO dates and confirm.
 2. **Detect fund domain** from the user's Gmail address (whatever the connector reports). Confirm before scanning (interactive) / assume it (routine).
 3. **Resume check.** If `pipeline_state.json` exists and is incomplete, resume from the last checkpoint and announce in one line — do not ask. If complete, this is a fresh run.
@@ -170,7 +170,7 @@ Process in chunks of 50. For each candidate:
 
 ### Phase 2b — Source synthesis (decks, docs, inline pitches)
 
-**Why.** A recently-passed pre-seed founder often has no website and a near-empty signature — the only description of what they're building lives in an attached deck or a linked Doc. Without it the row is `Founder Name (stealth) — (no details)` and a receiving fund can't tell what the deal is. This phase reads the source **on the VC's own machine/sandbox under the VC's own Google auth**, distills a few fields, and **discards the raw file** — only the paraphrase is ever sealed.
+**Why.** A recently-passed pre-seed founder often has no website and a near-empty signature — the only description of what they're building lives in an attached deck or a linked Doc. Without it the row is `Founder Name (stealth) — (no details)` and a receiving fund can't tell what the deal is. This phase reads the source **on the VC's own machine/sandbox under the VC's own Google auth**, distills a few fields, and **discards the raw file** — only the paraphrase is ever kept.
 
 **Dispatch as a subagent** after Phase 2. Brief it to read `classified.jsonl`, select qualifying passes, read each one's best source, write one synthesis row per candidate to `_pipeline_state/synthesis.jsonl`, delete all temp files, and return a ≤200-word summary. On restart, skip `thread_id`s already in `synthesis.jsonl`. If Drive is unavailable, process only PDF/Office attachments and inline text; if nothing is readable, skip and warn.
 
@@ -211,7 +211,7 @@ elif path.endswith('.docx'):
 **Privacy guardrail (hard rules):**
 - All downloads go to `_pipeline_state/_tmp/`; **delete each temp file the moment its synthesis row is written** (`rm -f`). The dir must be empty when the phase ends.
 - `description`, `note`, and `founder_bio` are the VC's own **paraphrase**, never transcription. Any verbatim quote ≤15 words.
-- Never write raw slide text, deck paragraphs, speaker notes, or the file itself into any persisted state. Only distilled fields are sealed.
+- Never write raw slide text, deck paragraphs, speaker notes, or the file itself into any persisted state. Only distilled fields are kept.
 
 **Progress:** `Phase 2b: synthesized 22/28 sources — 14 slides, 3 docs, 2 pdf, 3 inline; 9 stealth passes now described; 2 inaccessible`.
 
@@ -223,7 +223,7 @@ Stream `classified.jsonl`, dedup on the **founder anchor**, matching how Union i
 - Join `synthesis.jsonl` by `thread_id`; fill `description`, `sector`, `founder_bio`, `stage_signal`, `synthesized_from` from the richest synthesis.
 - `pass_reason` / `evidence`: the most concrete signal + best thread URL.
 
-Write one row per merged founder/deal to `pipeline.csv` in the working directory, with columns matching the payload schema above (`founder_linkedin_url, founder_email, company_name, domain, date_added, passed_at, pass_type, pass_reason, stage_signal, sector, founder_bio, hq_location, description, company_linkedin_url, evidence, confidence, synthesized_from`). Every written row must carry a founder anchor. `union.py publish` reads this CSV and seals each row to the fund's key. Then run Deliver.
+Write one row per merged founder/deal to `pipeline.csv` in the working directory, with columns matching the payload schema above (`founder_linkedin_url, founder_email, company_name, domain, date_added, passed_at, pass_type, pass_reason, stage_signal, sector, founder_bio, hq_location, description, company_linkedin_url, evidence, confidence, synthesized_from`). Every written row must carry a founder anchor. `union.py publish` reads this CSV and hands each row to the Union review queue. Then run Deliver.
 
 ---
 
@@ -231,26 +231,26 @@ Write one row per merged founder/deal to `pipeline.csv` in the working directory
 
 Two gauges, both decided **here in the email scan** — no external deal database:
 
-1. **Recency** — supplied by the twice-weekly cadence. Each run only sees mail since the last, so a surfaced pass is a recent one.
+1. **Recency** — supplied by the weekly cadence. Each run only sees mail since the last, so a surfaced pass is a recent one.
 2. **Round not yet closed** — the only trustworthy signal that a company has finished raising is **the email saying so** (PitchBook and other databases lag private pre-seed/seed rounds too much to rely on). During classification, read the thread for a round-closed signal and **exclude** those (a closed round can't be invested in — nothing to share). When it's genuinely ambiguous ("closing soon", "final spots"), keep it as a likely pass and say so in `pass_reason`; don't drop a possibly-live deal on a misread.
 
 That's the whole relevance model: **recent, and not yet closed.** Everything else about whether the company is a good fit is the receiving fund's judgment, downstream in Union.
 
 ---
 
-## Deliver — seal and publish to Union (the only destination)
+## Deliver — hand off to the Union review queue (the only destination)
 
-The only destination is the fund's **private, end-to-end-encrypted Union queue**. `union.py publish` seals **every deal to the fund's own public key** (a libsodium sealed box) before anything leaves the machine, so Primary and anyone with database access see only ciphertext. The passes become readable only when the manager unlocks with their passphrase in Union and approves them. **There is no CSV-to-Primary path and no email-to-anyone path** — the manager's approval is the only gate through which a deal ever becomes visible.
+The only destination is the fund's **private Union review queue**. `union.py publish` is the single tool that moves the rows there; it keeps each deal private to the fund, so only the manager can read it. The passes become visible only when the manager unlocks with their passphrase in Union and approves them. **There is no path to Primary and no email-to-anyone path** — the manager's approval is the only gate through which a deal ever becomes visible.
 
 ```bash
 python3 "$UNION_PY" publish --run-id "$RUN_ID" --sync   # drop --sync on an explicit-range backfill
 ```
 
-(Run from the working directory so it finds the payload, or pass the path. First run auto-installs PyNaCl for the encryption — one-time. `--run-id` lets the auto-emitted `run_completed` telemetry correlate with `run_started`.) Then branch on the exit code:
+(Run from the working directory so it finds the payload, or pass the path. First run auto-installs a small helper dependency — one-time. `--run-id` lets the auto-emitted `run_completed` telemetry correlate with `run_started`.) Then branch on the exit code:
 
-- **Exit 0 (published).** stdout carries `REVIEW_URL:` and `STORED:`. Tell the user in one line: `✅ Sealed & sent <STORED> passed-deal candidates to your private Union queue — only you can read them. Unlock with your passphrase to triage & approve: <REVIEW_URL>`. Then **send the VC a self-notification email** (Gmail connector, **to the user's own address from the connector profile**, never anyone else) — Subject `Union: <STORED> passed deals to review`, body one line + the `REVIEW_URL` — so they're reminded after the routine's session closes. Sending to self is fine to send directly.
+- **Exit 0 (published).** stdout carries `REVIEW_URL:` and `STORED:`. Tell the user in one line: `✅ Added <STORED> passed-deal candidates to your private Union queue — only you can read them. Unlock with your passphrase to triage & approve: <REVIEW_URL>`. Then **send the VC a self-notification email** (Gmail connector, **to the user's own address from the connector profile**, never anyone else) — Subject `Union: <STORED> passed deals to review`, body one line + the `REVIEW_URL` — so they're reminded after the routine's session closes. Sending to self is fine to send directly.
 - **Exit 3 (NOT_CONNECTED).** No Union connection configured. In a routine this is a setup error — report it (the env vars aren't set). Do **not** fall back to any other destination.
-- **Exit 4 (rejected) / 5 (unreachable) / 6 (crypto unavailable).** Relay the one-line reason. Exit 4 + 404 = the VC hasn't set their encryption passphrase in Union onboarding yet (tell them to). 401 = token invalid/revoked (ask Primary to re-issue the connection code). 5/6 = offer to retry; the candidates are not lost (re-run picks them up via the cursor overlap).
+- **Exit 4 (rejected) / 5 (unreachable) / 6 (helper dependency missing).** Relay the one-line reason. Exit 4 + 404 = the VC hasn't finished their Union onboarding passphrase step yet (tell them to). 401 = token invalid/revoked (ask Primary to re-issue the connection code). 5/6 = offer to retry; the candidates are not lost (re-run picks them up via the cursor overlap).
 
 Do **not** expose subagent internals or per-tool logs to the user — those go to `pipeline_run_log.md` for audit.
 
@@ -268,7 +268,7 @@ Generate one `RUN_ID` at the start (e.g. `run-<something-unique>`) and reuse it 
   ```
 - **On any halt:** `python3 "$UNION_PY" telemetry run_failed --run-id "$RUN_ID" --phase <phase> --error "<one-line class>" || true`
 - **On success:** you emit nothing — `union.py publish` auto-emits `run_completed` with the count. Pass it the same `--run-id`.
-- **On a clean run with zero passes to publish** (nothing sealed — so `publish` isn't called, or exits with "no rows"): emit a terminal event yourself so the operator sees a clean finish rather than a run that looks hung — `python3 "$UNION_PY" telemetry run_completed --run-id "$RUN_ID" --deals-published 0 || true`. (An empty `union.py publish` already does this, so it's harmless if both fire.)
+- **On a clean run with zero passes to publish** (nothing to add — so `publish` isn't called, or exits with "no rows"): emit a terminal event yourself so the operator sees a clean finish rather than a run that looks hung — `python3 "$UNION_PY" telemetry run_completed --run-id "$RUN_ID" --deals-published 0 || true`. (An empty `union.py publish` already does this, so it's harmless if both fire.)
 
 Always append `|| true` so a telemetry call can never break the run.
 
@@ -343,4 +343,4 @@ unusual.vc, usv.com, vy.capital, wing.vc, ycombinator.com
 
 ## Privacy
 
-Runs against the VC's own Gmail/Calendar/Drive under the VC's own auth. The sealed payload carries structured, paraphrased fields + thread URLs — never raw email bodies. Intermediate `_pipeline_state/` files stay on the VC's machine/sandbox. **Every deal is sealed to the fund's own key before it leaves; nothing is readable by Primary or anyone else until the manager approves it in Union.** Deck/doc synthesis reads sources locally, distills to a paraphrase, and deletes the raw file immediately — the deck itself never leaves the VC's machine.
+Runs against the VC's own Gmail/Calendar/Drive under the VC's own auth. Only structured, paraphrased fields + thread URLs are handed off — never raw email bodies. Intermediate `_pipeline_state/` files stay on the VC's machine/sandbox. **Every deal stays private to the fund; nothing is readable by Primary or anyone else until the manager approves it in Union.** Deck/doc synthesis reads sources locally, distills to a paraphrase, and deletes the raw file immediately — the deck itself never leaves the VC's machine.

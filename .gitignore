@@ -1,0 +1,7 @@
+# Pipeline-capture runtime scratch state — contains raw email thread data and
+# unencrypted deal candidates. Must never be committed; it lives only on the
+# VC's own machine/sandbox per the skill's privacy model.
+_pipeline_state/
+pipeline.csv
+pipeline_state.json
+pipeline_run_log.md

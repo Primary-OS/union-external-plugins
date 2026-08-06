@@ -1,0 +1,4 @@
+_pipeline_state/
+pipeline_state.json
+pipeline.csv
+pipeline_run_log.md

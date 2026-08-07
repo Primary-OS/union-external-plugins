@@ -7,17 +7,14 @@ It runs in *your* Claude account, under *your* Google login; Primary never touch
 your inbox, and every deal is encrypted to a key only you hold before it leaves
 Anthropic's cloud. You then approve which passed deals to actually share.
 
-## Web (cloud) or desktop — which do I use?
+## Where to set it up
 
-- **Use Claude Code on the web (cloud) for the automated routine.** Scheduling runs
-  in Anthropic's cloud, so it happens on its own even when your computer is off. This
-  is the recommended path and what this guide covers. Open **<https://claude.ai/code>**
-  (routines live at **<https://claude.ai/code/routines>**).
-- **Desktop Claude Code is optional, for manual runs.** It can run the same skill
-  interactively — handy for a one-off first backfill (`/pipeline-capture since <date>`)
-  — but it **cannot** run the unattended daily schedule. If you want manual runs too,
-  install the plugin per the [README](README.md) / [SETUP.md](SETUP.md). You do **not**
-  need desktop Claude Code for the routine.
+You can create this routine from **Claude Code on the web** or the **desktop app** —
+either works, and in both you simply paste the instructions below into Claude Code. The
+**web is the easiest start**, so that's the link we give you: open **<https://claude.ai/code>**
+(routines live at **<https://claude.ai/code/routines>**). Whichever you use, the one thing
+to get right is **attaching the tool's repository** in the routine (step 3 below) — that's
+what lets the pasted instructions actually run.
 
 ## Before you start (once)
 1. **Finish Union web onboarding and set your encryption passphrase.** The routine

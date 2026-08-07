@@ -6,9 +6,11 @@ Ships next to SKILL.md. Whether the skill was installed as a plugin or copied to
     find ~/.claude -name union.py -path '*pipeline-capture*' 2>/dev/null | head -1
 then invoke it as `python3 <that path> <subcommand>`.
 
-Bundled with the pipeline-capture skill. python3 stdlib, plus PyNaCl for the
-`publish` step (auto-installed on first use) — publish end-to-end encrypts every
-deal so Primary can't read anything you haven't approved. Subcommands:
+Bundled with the pipeline-capture skill. python3 stdlib only — the `publish` step
+end-to-end encrypts every deal with a libsodium sealed box so Primary can't read
+anything you haven't approved. It uses PyNaCl when already installed, and otherwise
+falls back to the bundled pure-Python sealed box (nacl_pure) — no pip, no network —
+so publish works even in a locked-down cloud sandbox. Subcommands:
 
   connect <code>     Decode a base64 connection code (issued by Primary) and write
                      the local config. Run once during setup.
@@ -36,6 +38,10 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timezone
+
+# Make the bundled pure-Python crypto fallback (nacl_pure.py, sibling file)
+# importable no matter what the working directory is when the skill runs union.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 CONFIG_DIR = os.path.expanduser("~/.config/union")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "pipeline-capture.json")
@@ -172,23 +178,34 @@ def _row_to_payload(row):
     return out
 
 
-def _ensure_nacl():
-    """Import PyNaCl (audited libsodium binding); pip-install it once if missing.
-    Publish end-to-end encrypts with a sealed box, so we use real crypto — never
-    a hand-rolled implementation."""
+def _get_sealer():
+    """Return (seal_fn, backend). seal_fn(pubkey_b64, payload) -> base64 sealed box.
+
+    Prefers PyNaCl (the audited libsodium binding) when it's already importable —
+    the local-dev case. Otherwise falls back to the bundled pure-Python sealed box
+    (nacl_pure), which needs no pip and no network, so encrypted publish works in a
+    locked-down cloud sandbox. Both emit a byte-identical libsodium crypto_box_seal
+    that Union's browser opens with crypto_box_seal_open.
+
+    We deliberately do NOT pip-install here: the install is exactly what returned a
+    403 in the routine sandbox and blocked publish. The pure-Python fallback removes
+    that dependency entirely."""
+    def _dump(payload):
+        return json.dumps(payload, separators=(",", ":")).encode("utf-8")
     try:
-        from nacl.public import PublicKey, SealedBox  # noqa: F401
-        return True
+        from nacl.public import PublicKey, SealedBox
+
+        def seal(pubkey_b64, payload):
+            ct = SealedBox(PublicKey(base64.b64decode(pubkey_b64))).encrypt(_dump(payload))
+            return base64.b64encode(ct).decode("ascii")
+        return seal, "pynacl"
     except ImportError:
-        import subprocess
-        print("Installing PyNaCl (one-time, for encrypted publish)…", file=sys.stderr)
-        try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pynacl"], check=True)
-            from nacl.public import PublicKey, SealedBox  # noqa: F401
-            return True
-        except Exception as e:
-            print(f"❌ Could not install PyNaCl ({e}). Run: {sys.executable} -m pip install pynacl", file=sys.stderr)
-            return False
+        import nacl_pure  # bundled sibling — pure stdlib, no install/egress
+
+        def seal(pubkey_b64, payload):
+            ct = nacl_pure.crypto_box_seal(_dump(payload), base64.b64decode(pubkey_b64))
+            return base64.b64encode(ct).decode("ascii")
+        return seal, "pure-python"
 
 
 def _ingest_headers(cfg):
@@ -251,15 +268,6 @@ def _get_public_key(cfg):
         return json.loads(resp.read().decode("utf-8"))["public_key"]
 
 
-def _seal(pubkey_b64, payload):
-    """Seal a deal to the fund's public key (libsodium crypto_box_seal). Returns
-    standard base64 — matches what the browser decrypts."""
-    from nacl.public import PublicKey, SealedBox
-    box = SealedBox(PublicKey(base64.b64decode(pubkey_b64)))
-    ct = box.encrypt(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
-    return base64.b64encode(ct).decode("ascii")
-
-
 def cmd_publish(args):
     cfg = _load_config()
     if not cfg or not cfg.get("token"):
@@ -296,8 +304,9 @@ def cmd_publish(args):
         })
         return 1
 
-    if not _ensure_nacl():
-        return 6
+    # Pick the encryption backend up front (PyNaCl if present, else the bundled
+    # pure-Python sealed box). This never fails and never installs anything.
+    seal, backend = _get_sealer()
 
     # 1. Fetch the fund's public key. Only the public key is needed to encrypt —
     #    no secret ever lives in this routine.
@@ -318,7 +327,7 @@ def cmd_publish(args):
         return 5
 
     # 2. Seal every deal to the public key. Plaintext never leaves this machine.
-    ciphertexts = [_seal(public_key, payload) for payload in rows]
+    ciphertexts = [seal(public_key, payload) for payload in rows]
 
     # 3. POST the ciphertexts (batched to the endpoint's per-call cap).
     headers = {**_ingest_headers(cfg), "Content-Type": "application/json"}

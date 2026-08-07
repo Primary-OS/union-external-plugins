@@ -246,11 +246,11 @@ The only destination is the fund's **private Union review queue**. `union.py pub
 python3 "$UNION_PY" publish --run-id "$RUN_ID" --sync   # drop --sync on an explicit-range backfill
 ```
 
-(Run from the working directory so it finds the payload, or pass the path. First run auto-installs a small helper dependency — one-time. `--run-id` lets the auto-emitted `run_completed` telemetry correlate with `run_started`.) Then branch on the exit code:
+(Run from the working directory so it finds the payload, or pass the path. No install needed — publish encrypts with PyNaCl if it's already present, otherwise a bundled pure-Python sealed box, so it works in the cloud sandbox with no pip and no network. `--run-id` lets the auto-emitted `run_completed` telemetry correlate with `run_started`.) Then branch on the exit code:
 
 - **Exit 0 (published).** stdout carries `REVIEW_URL:` and `STORED:`. Tell the user in one line: `✅ Added <STORED> passed-deal candidates to your private Union queue — only you can read them. Unlock with your passphrase to triage & approve: <REVIEW_URL>`. Then **send the VC a self-notification email** (Gmail connector, **to the user's own address from the connector profile**, never anyone else) — Subject `Union: <STORED> passed deals to review`, body one line + the `REVIEW_URL` — so they're reminded after the routine's session closes. Sending to self is fine to send directly.
 - **Exit 3 (NOT_CONNECTED).** No Union connection configured. In a routine this is a setup error — report it (the env vars aren't set). Do **not** fall back to any other destination.
-- **Exit 4 (rejected) / 5 (unreachable) / 6 (helper dependency missing).** Relay the one-line reason. Exit 4 + 404 = the VC hasn't finished their Union onboarding passphrase step yet (tell them to). 401 = token invalid/revoked (ask Primary to re-issue the connection code). 5/6 = offer to retry; the candidates are not lost (re-run picks them up via the cursor overlap).
+- **Exit 4 (rejected) / 5 (unreachable).** Relay the one-line reason. Exit 4 + 404 = the VC hasn't finished their Union onboarding passphrase step yet (tell them to). 401 = token invalid/revoked (ask Primary to re-issue the connection code). 5 = offer to retry; the candidates are not lost (re-run picks them up via the cursor overlap). (Encryption no longer has its own failure mode — the pure-Python fallback means publish never fails for a missing crypto dependency.)
 
 Do **not** expose subagent internals or per-tool logs to the user — those go to `pipeline_run_log.md` for audit.
 

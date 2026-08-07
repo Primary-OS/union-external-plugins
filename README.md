@@ -28,6 +28,10 @@ Then connect **Gmail**, **Google Calendar**, and **Google Drive** in Claude Code
 
 > **Note on the command name:** plugin skills are namespaced as `plugin:skill`, so the command is `/pipeline-capture:pipeline-capture` (not bare `/pipeline-capture`). Human setup guide: [`SETUP.md`](SETUP.md); run-time choreography: [`plugins/pipeline-capture/ONBOARDING.md`](plugins/pipeline-capture/ONBOARDING.md).
 
+## Run it automatically every day (recommended)
+
+The steps above are the **desktop / manual** path — good for a one-off backfill. To have it run **on its own every day** (even with your laptop closed), set it up as a **scheduled cloud routine** on Claude Code for the web: open <https://claude.ai/code/routines>, attach this repo (`Primary-OS/union-external-plugins` — it's public, no fork or invite needed), and follow **[`ROUTINE_SETUP.md`](ROUTINE_SETUP.md)** for the exact prompt, schedule, connectors, and environment settings. That's the way most funds should run it.
+
 ## Updates (the reason this is a plugin)
 
 Fixes pushed to this repo reach VCs through plugin updates. Updates are **not** automatic by default for third-party marketplaces — to get them, either:
